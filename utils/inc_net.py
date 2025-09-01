@@ -5,6 +5,14 @@ from torch import nn
 from backbone.linears import SimpleLinear, SplitCosineLinear, CosineLinear, EaseCosineLinear, SimpleContinualLinear
 from backbone.prompt import CodaPrompt
 import timm
+from peft import LoraConfig, get_peft_model
+
+
+def count_parameters(model, trainable=False):
+    if trainable:
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return sum(p.numel() for p in model.parameters())
+
 
 def get_backbone(args, pretrained=False):
     name = args["backbone_type"].lower()
@@ -17,7 +25,20 @@ def get_backbone(args, pretrained=False):
         model = timm.create_model("vit_base_patch16_224_in21k",pretrained=True, num_classes=0)
         model.out_dim = 768
         return model.eval()
-
+    elif "lora" in name:
+        model = timm.create_model(name[:-5], pretrained=True, num_classes=0)
+        model.requires_grad_(False)
+        model.out_dim = 768
+        lora_config = LoraConfig(
+            r=args["model_lora_r"],
+            lora_alpha=args["model_lora_alpha"],
+            target_modules=args["model_lora_target_modules"],
+            lora_dropout=args["model_lora_dropout"],
+            bias="none",
+            init_lora_weights="gaussian",
+        )
+        model = get_peft_model(model, lora_config)
+        return model
     elif '_memo' in name:
         if args["model_name"] == "memo":
             from backbone import vit_memo
@@ -581,6 +602,18 @@ class SimpleVitNet(BaseNet):
         out = self.fc(x)
         out.update({"features": x})
         return out
+
+    def get_backbone_trainable_params(self):
+        params = {}
+        for name, param in self.backbone.named_parameters():
+            if param.requires_grad:
+                params[name] = param
+        return params
+
+    def __repr__(self):
+        trainable_params = count_parameters(self, trainable=True)
+        total_params = count_parameters(self)
+        return f"SimpleVitNet(trainable_params={trainable_params}, total_params={total_params}, percentage={trainable_params * 100 / total_params:.2f})"
 
 # l2p and dualprompt
 class PromptVitNet(nn.Module):

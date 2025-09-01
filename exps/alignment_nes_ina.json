@@ -1,0 +1,44 @@
+{
+    "prefix": "reproduce",
+    "dataset": "imageneta",
+    "memory_size": 0,
+    "memory_per_class": 0,
+    "fixed_memory": false,
+    "shuffle": true,
+    "init_cls": 20,
+    "increment": 20,
+    "model_name": "alignment",
+    "backbone_type": "vit_base_patch16_224_lora",
+    "device": ["0"],
+    "seed": [1993],
+    
+    "tuned_epoch":10,
+    "init_lr":1e-2,
+    "batch_size":48,
+    "weight_decay":5e-4,
+    "min_lr":1e-6,
+    "optimizer":"sgd",
+
+    "reset": true,
+    "model_lora_r": 64,
+    "model_lora_alpha": 128,
+    "model_lora_target_modules": ["qkv"],
+    "model_lora_dropout": 0.0,
+
+    "train_freeze_old": true,
+    "train_merge_method": "ties",
+    "train_merge_coef": 1.0,
+    "train_merge_topk": 100,
+    
+    "train_ca_method": "nes",
+    "train_ca_nes_iterations": 200,
+    "train_ca_nes_patience": 20,
+    "train_ca_nes_lr": 5e-2,
+    "train_ca_nes_sigma_init": 1e-3,
+    "train_ca_nes_sigma_final": 1e-3,
+    "train_ca_nes_sigma_min": 1e-6,
+    "train_ca_nes_sigma_max": 1.0,
+    "train_ca_lambda_old_default": 1e-3,
+    "train_ca_lambda_cur_default": 1e-3
+}
+

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from copy import deepcopy
-from timm.models.layers.weight_init import trunc_normal_
+from timm.models.layers import trunc_normal_
 
 
 class SimpleLinear(nn.Module):
@@ -199,20 +199,25 @@ def reduce_proxies(out, nb_proxy):
 
     return (attentions * simi_per_class).sum(-1)
 
+def count_parameters(model, trainable=False):
+    if trainable:
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return sum(p.numel() for p in model.parameters())
 
 class SimpleContinualLinear(nn.Module):
-    def __init__(self, embed_dim, nb_classes, feat_expand=False, with_norm=False):
+    def __init__(self, embed_dim, nb_classes, feat_expand=False, with_norm=False, with_bias=True):
         super().__init__()
 
         self.embed_dim = embed_dim
         self.feat_expand = feat_expand
         self.with_norm = with_norm
+        self.with_bias = with_bias
         heads = []
         single_head = []
         if with_norm:
             single_head.append(nn.LayerNorm(embed_dim))
 
-        single_head.append(nn.Linear(embed_dim, nb_classes, bias=True))
+        single_head.append(nn.Linear(embed_dim, nb_classes, bias=self.with_bias))
         head = nn.Sequential(*single_head)
 
         heads.append(head)
@@ -234,9 +239,10 @@ class SimpleContinualLinear(nn.Module):
         if self.with_norm:
             single_head.append(nn.LayerNorm(self.embed_dim))
             
-        _fc = nn.Linear(self.embed_dim, nb_classes, bias=True)
+        _fc = nn.Linear(self.embed_dim, nb_classes, bias=self.with_bias)
         trunc_normal_(_fc.weight, std=.02)
-        nn.init.constant_(_fc.bias, 0) 
+        if _fc.bias is not None:
+            nn.init.constant_(_fc.bias, 0) 
         single_head.append(_fc)
         new_head = nn.Sequential(*single_head)
 
@@ -253,3 +259,8 @@ class SimpleContinualLinear(nn.Module):
             out.append(self.heads[ti](fc_inp))
         out = {'logits': torch.cat(out, dim=1)}
         return out
+
+    def __repr__(self):
+        trainable_params = count_parameters(self, trainable=True)
+        total_params = count_parameters(self)
+        return f"SimpleContinualLinear(trainable_params={trainable_params}, total_params={total_params}, percentage={trainable_params * 100 / total_params:.2f})"

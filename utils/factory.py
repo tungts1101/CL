@@ -46,6 +46,12 @@ def get_model(model_name, args):
         from models.cofima import Learner
     elif name == 'duct':
         from models.duct import Learner
+    elif name == 'local_robustness':
+        from models.local_robustness import Learner
+    elif name == 'base_merging':
+        from models.merging import BaseMergingLearner as Learner
+    elif name == 'alignment':
+        from models.alignment import AlignmentLearner as Learner
     else:
         assert 0
     return Learner(args)

@@ -3,6 +3,9 @@ from torchvision import datasets, transforms
 from utils.toolkit import split_images_labels
 
 
+data_root_path = "/home/lis/data"
+
+
 class iData(object):
     train_trsf = []
     test_trsf = []
@@ -28,8 +31,8 @@ class iCIFAR10(iData):
     class_order = np.arange(10).tolist()
 
     def download_data(self):
-        train_dataset = datasets.cifar.CIFAR10("./data", train=True, download=True)
-        test_dataset = datasets.cifar.CIFAR10("./data", train=False, download=True)
+        train_dataset = datasets.cifar.CIFAR10(f"{data_root_path}", train=True, download=True)
+        test_dataset = datasets.cifar.CIFAR10(f"{data_root_path}", train=False, download=True)
         self.train_data, self.train_targets = train_dataset.data, np.array(
             train_dataset.targets
         )
@@ -56,8 +59,8 @@ class iCIFAR100(iData):
     class_order = np.arange(100).tolist()
 
     def download_data(self):
-        train_dataset = datasets.cifar.CIFAR100("./data", train=True, download=True)
-        test_dataset = datasets.cifar.CIFAR100("./data", train=False, download=True)
+        train_dataset = datasets.cifar.CIFAR100(f"{data_root_path}", train=True, download=True)
+        test_dataset = datasets.cifar.CIFAR100(f"{data_root_path}", train=False, download=True)
         self.train_data, self.train_targets = train_dataset.data, np.array(
             train_dataset.targets
         )
@@ -137,8 +140,8 @@ class iCIFAR224(iData):
         self.class_order = np.arange(100).tolist()
 
     def download_data(self):
-        train_dataset = datasets.cifar.CIFAR100("./data", train=True, download=True)
-        test_dataset = datasets.cifar.CIFAR100("./data", train=False, download=True)
+        train_dataset = datasets.cifar.CIFAR100(f"{data_root_path}", train=True, download=True)
+        test_dataset = datasets.cifar.CIFAR100(f"{data_root_path}", train=False, download=True)
         self.train_data, self.train_targets = train_dataset.data, np.array(
             train_dataset.targets
         )
@@ -225,8 +228,8 @@ class iImageNetR(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/imagenet-r/train/"
-        test_dir = "./data/imagenet-r/test/"
+        train_dir = f"{data_root_path}/imagenet-r/train/"
+        test_dir = f"{data_root_path}/imagenet-r/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -246,8 +249,8 @@ class iImageNetA(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/imagenet-a/train/"
-        test_dir = "./data/imagenet-a/test/"
+        train_dir = f"{data_root_path}/imagenet-a/train/"
+        test_dir = f"{data_root_path}/imagenet-a/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -268,8 +271,8 @@ class CUB(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/cub/train/"
-        test_dir = "./data/cub/test/"
+        train_dir = f"{data_root_path}/cub/train/"
+        test_dir = f"{data_root_path}/cub/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -289,8 +292,8 @@ class objectnet(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/objectnet/train/"
-        test_dir = "./data/objectnet/test/"
+        train_dir = f"{data_root_path}/objectnet/train/"
+        test_dir = f"{data_root_path}/objectnet/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -310,8 +313,8 @@ class omnibenchmark(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/omnibenchmark/train/"
-        test_dir = "./data/omnibenchmark/test/"
+        train_dir = f"{data_root_path}/omnibenchmark/train/"
+        test_dir = f"{data_root_path}/omnibenchmark/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -332,8 +335,8 @@ class vtab(iData):
 
     def download_data(self):
         # assert 0, "You should specify the folder of your dataset"
-        train_dir = "./data/vtab-cil/vtab/train/"
-        test_dir = "./data/vtab-cil/vtab/test/"
+        train_dir = f"{data_root_path}/vtab-cil/vtab/train/"
+        test_dir = f"{data_root_path}/vtab-cil/vtab/test/"
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
@@ -343,3 +346,56 @@ class vtab(iData):
 
         self.train_data, self.train_targets = split_images_labels(train_dset.imgs)
         self.test_data, self.test_targets = split_images_labels(test_dset.imgs)
+
+
+
+class iTinyImageNet(iData):
+    use_path = True
+    
+    train_trsf=build_transform(True, None)
+    test_trsf=build_transform(False, None)
+    common_trsf = [    ]
+
+    class_order = np.arange(200).tolist()
+
+    def __init__(self,use_input_norm=True):
+        if use_input_norm:
+            self.common_trsf = [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
+
+    def download_data(self):
+        train_dir = f"{data_root_path}/tiny-imagenet-200/train/"
+        test_dir = f"{data_root_path}/tiny-imagenet-200/test/"
+
+        train_dset = datasets.ImageFolder(train_dir)
+        test_dset = datasets.ImageFolder(test_dir)
+
+        self.train_data, self.train_targets = split_images_labels(train_dset.imgs)
+        self.test_data, self.test_targets = split_images_labels(test_dset.imgs)
+
+
+class cars(iData):
+    use_path = True
+    
+    train_trsf=build_transform(True, None)
+    test_trsf=build_transform(False, None)
+    common_trsf = [    ]
+
+    class_order = np.arange(196).tolist()
+
+    def download_data(self):
+        # Following instruction from https://github.com/pytorch/vision/issues/7545 to download cars dataset
+        
+        # train_dir = f"{data_root_path}/cars/train/"
+        # test_dir = f"{data_root_path}/cars/test/"
+
+        # train_dset = datasets.ImageFolder(train_dir)
+        # test_dset = datasets.ImageFolder(test_dir)
+
+        # self.train_data, self.train_targets = split_images_labels(train_dset.imgs)
+        # self.test_data, self.test_targets = split_images_labels(test_dset.imgs)
+        
+        train_dataset = datasets.StanfordCars(f"{data_root_path}", split='train', download=False)
+        test_dataset = datasets.StanfordCars(f"{data_root_path}", split='test', download=False)
+        
+        self.train_data, self.train_targets = split_images_labels(train_dataset._samples)
+        self.test_data, self.test_targets = split_images_labels(test_dataset._samples)
