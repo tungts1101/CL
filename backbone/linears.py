@@ -263,4 +263,4 @@ class SimpleContinualLinear(nn.Module):
     def __repr__(self):
         trainable_params = count_parameters(self, trainable=True)
         total_params = count_parameters(self)
-        return f"SimpleContinualLinear(trainable_params={trainable_params}, total_params={total_params}, percentage={trainable_params * 100 / total_params:.2f})"
+        return f"SimpleContinualLinear(trainable_params={trainable_params:,}, total_params={total_params:,}, percentage={trainable_params * 100 / total_params:.2f})"
