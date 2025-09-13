@@ -65,6 +65,7 @@ def _train(args):
 
     cnn_curve, nme_curve = {"top1": [], "top5": []}, {"top1": [], "top5": []}
     cnn_matrix, nme_matrix = [], []
+    acc_history = []
 
     for task in range(data_manager.nb_tasks):
         # logging.info("All params: {}".format(count_parameters(model._network)))
@@ -103,6 +104,8 @@ def _train(args):
 
             logging.info("Average Accuracy (CNN): {}".format(sum(cnn_curve["top1"])/len(cnn_curve["top1"])))
             logging.info("Average Accuracy (NME): {}".format(sum(nme_curve["top1"])/len(nme_curve["top1"])))
+
+            acc_history.append(sum(cnn_curve["top1"])/len(cnn_curve["top1"]))
         else:
             logging.info("No NME accuracy.")
             logging.info("CNN: {}".format(cnn_accy["grouped"]))
@@ -119,6 +122,11 @@ def _train(args):
 
             print('Average Accuracy (CNN):', sum(cnn_curve["top1"])/len(cnn_curve["top1"]))
             logging.info("Average Accuracy (CNN): {} \n".format(sum(cnn_curve["top1"])/len(cnn_curve["top1"])))
+
+            acc_history.append(sum(cnn_curve["top1"])/len(cnn_curve["top1"]))
+
+    acc_history = [float(np.round(v, 2)) for v in acc_history]
+    logging.info(f"Final accuracy history: {acc_history}")
 
     if 'print_forget' in args.keys() and args['print_forget'] is True:
         if len(cnn_matrix) > 0:

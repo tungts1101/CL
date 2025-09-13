@@ -61,16 +61,6 @@ def main():
     CONFIGS = [
         "exps/slca_ina.json",
         "exps/mos_ina.json",
-        "exps/slca_cub.json",
-        "exps/mos_cub.json",
-        "exps/slca_vtab.json",
-        "exps/mos_vtab.json",
-        "exps/slca_omni.json",
-        "exps/mos_omni.json",
-        "exps/slca_inr.json",
-        "exps/mos_inr.json",
-        "exps/slca.json",
-        "exps/mos.json"
     ]
 
     try:

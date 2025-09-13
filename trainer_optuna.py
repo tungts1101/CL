@@ -119,6 +119,7 @@ def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
 
     cnn_curve, nme_curve = {"top1": [], "top5": []}, {"top1": [], "top5": []}
     cnn_matrix, nme_matrix = [], []
+    acc_history = []
 
     for task in range(data_manager.nb_tasks):
         model.incremental_train(data_manager)
@@ -147,6 +148,7 @@ def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
             logging.info(
                 f"[Task {task}] Current Average Accuracy (CNN): {current_avg_accuracy:.2f}"
             )
+            acc_history.append(current_avg_accuracy)
 
         else:
             logging.info("No NME accuracy.")
@@ -163,8 +165,8 @@ def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
             logging.info(
                 f"[Task {task}] Current Average Accuracy (CNN): {current_avg_accuracy:.2f}"
             )
+            acc_history.append(current_avg_accuracy)
 
-        # Only check custom thresholds during tasks, not Optuna pruning
         if pruning_thresholds and task in pruning_thresholds:
             threshold = pruning_thresholds[task]
             if current_avg_accuracy < threshold:
@@ -174,10 +176,9 @@ def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
                 raise optuna.TrialPruned()
 
     final_avg_accuracy = sum(cnn_curve["top1"]) / len(cnn_curve["top1"])
-    trial.report(final_avg_accuracy, step=trial.number)
-    if trial.should_prune():
-        logging.info(f"[Pruning] Trial pruned at final evaluation.")
-        raise optuna.TrialPruned()
+
+    acc_history = [float(np.round(v, 2)) for v in acc_history]
+    logging.info(f"Final accuracy history: {acc_history}")
 
     # Calculate forgetting if needed
     forgetting_cnn = None
