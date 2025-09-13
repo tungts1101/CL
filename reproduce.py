@@ -59,8 +59,24 @@ def main():
         additional_args.append('--reset')
     
     CONFIGS = [
-        "exps/slca_ina.json",
-        "exps/mos_ina.json",
+        # "exps/slca.json",
+        # "exps/slca_inr.json",
+        # "exps/slca_ina.json",
+        # "exps/slca_cub.json",
+        # "exps/slca_omni.json",
+        # "exps/slca_vtab.json",
+        # "exps/mos.json",
+        # "exps/mos_inr.json",
+        # "exps/mos_ina.json",
+        # "exps/mos_cub.json",
+        # "exps/mos_omni.json",
+        # "exps/mos_vtab.json",
+        "exps/ease.json",
+        "exps/ease_inr.json",
+        "exps/ease_ina.json",
+        "exps/ease_cub.json",
+        "exps/ease_omni.json",
+        "exps/ease_vtab.json",
     ]
 
     try:
