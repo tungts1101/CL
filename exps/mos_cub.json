@@ -1,6 +1,6 @@
 {
     "prefix": "reproduce",
-    "dataset": "imagenetr",
+    "dataset": "cub",
     "memory_size": 0,
     "memory_per_class": 0,
     "fixed_memory": false,
@@ -13,9 +13,9 @@
     "seed": [1993],
     
     "tuned_epoch": 10,
-    "init_lr": 0.05,
-    "batch_size": 16,
-    "weight_decay": 0.005,
+    "init_lr": 0.01,
+    "batch_size": 32,
+    "weight_decay": 0.0005,
     "min_lr": 0,
     "optimizer": "sgd",
     "scheduler": "cosine",
@@ -25,7 +25,6 @@
     "reg": 0.1,
     "adapter_momentum": 0.1,
     "ensemble": true,
-    "M": 1000,
 
     "use_ori": true,
     "ori_crct_epochs": 30,
@@ -33,6 +32,11 @@
     "ca_storage_efficient_method": "covariance", 
     "ca_storage_efficient_method_choices": ["covariance", "multi-centroid", "variance"],
     "n_centroids": 10,
+    
+    "pretrained": true,
+    "drop": 0.0,
+    "drop_path": 0.0,
+    "ffn_num": 16,
 
     "crct_epochs": 10,
     "ca_sample_per_cls": 512,
@@ -40,11 +44,5 @@
     "ca_lr": 0.0005,
     "ca_robust_weight": 0.5,
     "ca_entropy_weight": 0.2,
-    "ca_logit_norm": 0.0,
-
-    "pretrained": true,
-    "drop": 0.0,
-    "drop_path": 0.0,
-    "ffn_num": 16
-
+    "ca_logit_norm": 0.0
 }

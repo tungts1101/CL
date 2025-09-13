@@ -1,0 +1,85 @@
+import subprocess
+import argparse
+import os
+import time
+
+def run_experiment(config_file, additional_args=None):
+    if not os.path.exists(config_file):
+        print(f"Error: Config file not found: {config_file}")
+        return 1, 0
+    
+    cmd = ["python", "main.py", "--config", config_file]
+    
+    if additional_args:
+        cmd.extend(additional_args)
+
+    start_time = time.time()
+    
+    try:
+        result = subprocess.run(cmd, check=False, capture_output=False)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"\nExperiment completed: {config_file}")
+        print(f"Execution time: {execution_time/3600:.2f} hours")
+        
+        return result.returncode, execution_time
+        
+    except KeyboardInterrupt:
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"\n\nExperiment interrupted: {config_file}")
+        print(f"Execution time before interruption: {execution_time:.2f} seconds")
+        return -1, execution_time
+
+def main():
+    parser = argparse.ArgumentParser(description='Run multiple experiments with different configurations')
+    parser.add_argument('--optuna', action='store_true', default=False,
+                        help='Enable Optuna optimization for all configs')
+    parser.add_argument('--n_trials', type=int, default=100,
+                        help='Number of Optuna trials (only used with --optuna)')
+    parser.add_argument('--early_stop_patience', type=int, default=None,
+                        help='Early stop patience for Optuna (only used with --optuna)')
+    parser.add_argument('--max_time_hours', type=float, default=None,
+                        help='Max time in hours for Optuna (only used with --optuna)')
+    parser.add_argument('--reset', action='store_true', default=False,
+                        help='Reset training and start from scratch')
+    
+    args = parser.parse_args()
+    
+    additional_args = []
+    if args.optuna:
+        additional_args.append('--optuna')
+        if args.n_trials:
+            additional_args.extend(['--n_trials', str(args.n_trials)])
+        if args.early_stop_patience:
+            additional_args.extend(['--early_stop_patience', str(args.early_stop_patience)])
+        if args.max_time_hours:
+            additional_args.extend(['--max_time_hours', str(args.max_time_hours)])
+    if args.reset:
+        additional_args.append('--reset')
+    
+    CONFIGS = [
+        "exps/slca_ina.json",
+        "exps/mos_ina.json",
+        "exps/slca_cub.json",
+        "exps/mos_cub.json",
+        "exps/slca_vtab.json",
+        "exps/mos_vtab.json",
+        "exps/slca_omni.json",
+        "exps/mos_omni.json",
+        "exps/slca_inr.json",
+        "exps/mos_inr.json",
+        "exps/slca.json",
+        "exps/mos.json"
+    ]
+
+    try:
+        for i, config_file in enumerate(CONFIGS, 1):
+            print(f"\n\nProgress: {i}/{len(CONFIGS)}")
+            run_experiment(config_file, additional_args)
+    
+    except KeyboardInterrupt:
+        print("\n\nBatch execution interrupted by user!")
+
+if __name__ == '__main__':
+    main()

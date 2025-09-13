@@ -448,20 +448,15 @@ class AlignmentLearner(BaseMergingLearner):
             return U @ Vh
         
 
-        def _auto_lambda_simple(X: torch.Tensor, Y: torch.Tensor) -> float:
-            """
-            Choose λ by training on 80% and validating on the remaining 20%.
-            Solves (X_tr^T X_tr + λ I) W = X_tr^T Y_tr and picks λ minimizing
-            MSE(X_val @ W, Y_val). Grid: 1e-8 ... 1e+8 (base 10).
-            """
+        def _auto_lambda_simple(X, Y):
             X = X.detach().to(dtype=torch.float32)
             Y = Y.detach().to(dtype=torch.float32)
             device = X.device
             n = X.shape[0]
 
-            # handle tiny datasets
-            if n < 3:
-                return 1e-1
+            # # handle tiny datasets
+            # if n < 3:
+            #     return 1e-1
 
             # shuffle & split
             idx = torch.randperm(n, device=device)
@@ -487,20 +482,14 @@ class AlignmentLearner(BaseMergingLearner):
                     best_loss, best_lam = loss, float(lam.item())
             return best_lam
 
-        def fit_ridge_map(ZM: torch.Tensor, Zi: torch.Tensor, lam: float = None, identity_prior: bool = False):
-            """
-            Solve Zi ≈ ZM @ A + c (ridge). If lam is None, pick it via _auto_lambda_simple on (ZM,Zi).
-            If identity_prior and dims match, bias A toward identity.
-            Returns (A:(dM,dS), c:(dS,))
-            """
+        def fit_ridge_map(ZM, Zi, identity_prior = False):
             ZM = ZM.float().detach()
             Zi = Zi.float().detach()
             device = ZM.device
             n, dM = ZM.shape
             dS = Zi.shape[1]
 
-            if lam is None:
-                lam = _auto_lambda_simple(ZM, Zi)
+            lam = _auto_lambda_simple(ZM, Zi)
 
             G = ZM.T @ ZM                        # (dM,dM)
             H = ZM.T @ Zi                        # (dM,dS)
@@ -598,20 +587,13 @@ class AlignmentLearner(BaseMergingLearner):
                 Wi = fc.weight.data.detach().cpu().t().float()
                 bi = None if fc.bias is None else fc.bias.data.detach().cpu().float()
 
-
-                # R_Mi = procrustes(ZM, Zi).cpu()
-                # # # Drift-safe Procrustes (regularized + blended)
-                # # R_Mi = procrustes_reg(ZM, Zi, lam=0.05).cpu()
-                # # R_Mi = blend_with_identity(R_Mi, alpha=0.4).cpu()
-
-                # # Rotate weights (no bias change typically under LN)
-                # Wi_rot = R_Mi @ Wi                                   # (dM, C_i)
-                # bi_rot = bi  # keep as-is under LN
+                R_Mi = procrustes(ZM, Zi).cpu()
+                Wi_rot = R_Mi @ Wi                                   # (dM, C_i)
+                bi_rot = bi
                 
-                A, c = fit_ridge_map(ZM, Zi)           # robust, no SVDs
-                Wi_rot = A @ Wi                                  # (dM, C_i)
-                bi_rot = None if bi is None else (c @ Wi) + bi   # (C_i,)
-
+                # A, c = fit_ridge_map(ZM, Zi)           # robust, no SVDs
+                # Wi_rot = A @ Wi                                  # (dM, C_i)
+                # bi_rot = None if bi is None else (c @ Wi) + bi   # (C_i,)
 
                 fc.weight.data.copy_(Wi_rot.t().to(fc.weight.device))
                 if (fc.bias is not None) and (bi_rot is not None):

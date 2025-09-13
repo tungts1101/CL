@@ -24,6 +24,16 @@
     "prompt_token_num":5,
 
     "use_RP": true,
-    "M": 10000
+    "M": 10000,
+
+    "use_ori": true,
+
+    "crct_epochs": 10,
+    "ca_sample_per_cls": 512,
+    "ca_batch_size": 128,
+    "ca_lr": 0.0005,
+    "ca_robust_weight": 0.5,
+    "ca_entropy_weight": 0.2,
+    "ca_logit_norm": 0.0
 }
 

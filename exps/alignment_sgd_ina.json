@@ -20,15 +20,16 @@
     "optimizer":"sgd",
 
     "reset": true,
-    "model_lora_r": 256,
-    "model_lora_alpha": 512,
-    "model_lora_target_modules": ["qkv", "proj"],
+    "model_lora_r": 64,
+    "model_lora_alpha": 128,
+    "model_lora_target_modules": ["qkv"],
     "model_lora_dropout": 0.0,
 
     "train_freeze_old": true,
     "train_merge_method": "ties",
     "train_merge_coef": 1.0,
     "train_merge_topk": 100,
+    "train_merge_incremental": true,
     
     "train_ca_method": "sgd"
 }

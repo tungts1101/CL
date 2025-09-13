@@ -6,9 +6,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 from utils.toolkit import tensor2numpy, accuracy
 from scipy.spatial.distance import cdist
+import os
+
 
 EPSILON = 1e-8
 batch_size = 64
+
+CHECKPOINT_DIR = "./checkpoints/"
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 class BaseLearner(object):
     def __init__(self, args):
@@ -88,6 +93,19 @@ class BaseLearner(object):
         plt.savefig(str(self.args['model_name'])+str(tot_classes)+'tsne.pdf')
         plt.close()
 
+    def prefix(self):
+        prefix_parts = [
+            str(self.args["seed"]),
+            self.args["dataset"],
+            str(self.args["init_cls"]),
+            self.args["model_name"],
+            "lca",
+        ]
+        return "_".join(prefix_parts)
+
+    def checkpoint_path(self, task):
+        filename = "{}_{}.pkl".format(self.prefix(), task)
+        return os.path.join(CHECKPOINT_DIR, filename)
 
     def save_checkpoint(self, filename):
         self._network.cpu()
@@ -95,7 +113,7 @@ class BaseLearner(object):
             "tasks": self._cur_task,
             "model_state_dict": self._network.state_dict(),
         }
-        torch.save(save_dict, "{}_{}.pkl".format(filename, self._cur_task))
+        torch.save(save_dict, filename)
 
     def after_task(self):
         pass
