@@ -8,9 +8,7 @@ This repository is tested in an Anaconda environment. To reproduce exactly, crea
 ```
 conda create -y -n continual_learning python=3.9
 conda activate continual_learning
-pip install 'torch==2.7.1+cu118' --extra-index-url https://download.pytorch.org/whl/cu118
-pip install timm==0.6.12
-pip install peft==0.15.2
+pip install -r requirements.tx
 ```
 
 ## To reproduce results run code of the form
