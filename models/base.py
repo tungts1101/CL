@@ -482,16 +482,18 @@ class BaseLearner(object):
             self._ca_class_covs = new_ca_class_covs
 
         for cls_idx in range(self._known_classes, self._total_classes):
-            data, targets, idx_dataset = data_manager.get_dataset(np.arange(class_idx, class_idx+1), source='train',
+            data, targets, idx_dataset = data_manager.get_dataset(np.arange(cls_idx, cls_idx+1), source='train',
                                                                   mode='test', ret_data=True)
             idx_loader = DataLoader(idx_dataset, batch_size=64, shuffle=False, num_workers=4)
             vectors, _ = self._extract_vectors(idx_loader)
 
-            features_list = torch.cat(vectors, dim=0)
+            if isinstance(vectors, np.ndarray):
+                features_list = torch.tensor(vectors, dtype=torch.float64)
+            else:
+                features_list = torch.cat(vectors, dim=0).to(torch.float64)
+            
             class_mean = torch.mean(features_list, dim=0)
-            class_cov = (
-                torch.cov(features_list.T) + torch.eye(class_mean.shape[-1]) * 1e-4
-            )
+            class_cov = torch.cov(features_list.T) + torch.eye(class_mean.shape[-1], dtype=torch.float64) * 1e-4
 
             self._ca_class_means[cls_idx, :] = class_mean
             self._ca_class_covs[cls_idx, ...] = class_cov
@@ -517,7 +519,7 @@ class BaseLearner(object):
         batch_size = self.args.get("ca_batch_size", 64)
 
         for class_idx in range(self._total_classes):
-            mean = torch.tensor(self._ca_class_means[class_idx], dtype=torch.float64).to(self._device)
+            mean = self._ca_class_means[class_idx].to(self._device)
             cov = self._ca_class_covs[class_idx].to(self._device)
 
             m = MultivariateNormal(mean.float(), cov.float())
@@ -612,7 +614,7 @@ class BaseLearner(object):
                     total_term3 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term3 (entropy)
                     
                     unique_classes = torch.unique(y)
-                    class_dist = torch.cdist(x, self._ca_class_means[:self._total_classes])
+                    class_dist = torch.cdist(x, self._ca_class_means[:self._total_classes].to(self._device))
                     class_indices = torch.argmin(class_dist, dim=1)
                     for class_i in unique_classes:
                         label_mask = (y == class_i)
