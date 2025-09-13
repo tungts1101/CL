@@ -14,6 +14,7 @@ from optuna.samplers import TPESampler
 import traceback
 import time
 import gc
+from pathlib import Path
 
 
 def suggest_hyperparameters(trial):
@@ -255,7 +256,9 @@ def run_optuna_optimization(
 
     OPTUNA_DIR = "optuna"
     os.makedirs(OPTUNA_DIR, exist_ok=True)
-    storage_name = os.path.join(OPTUNA_DIR, f"sqlite:///optuna_{study_name}.db")
+    db_path = Path(OPTUNA_DIR) / f"{study_name}.db"
+    storage_name = f"sqlite:///{db_path}"
+
     study = optuna.create_study(
         direction="maximize",
         study_name=study_name,
