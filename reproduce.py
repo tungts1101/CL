@@ -33,6 +33,8 @@ def run_experiment(config_file, additional_args=None):
 
 def main():
     parser = argparse.ArgumentParser(description='Run multiple experiments with different configurations')
+    parser.add_argument('--data_root_path', type=str, default=None,
+                        help=f'Path to the data root directory.')
     parser.add_argument('--optuna', action='store_true', default=False,
                         help='Enable Optuna optimization for all configs')
     parser.add_argument('--n_trials', type=int, default=100,
@@ -47,6 +49,8 @@ def main():
     args = parser.parse_args()
     
     additional_args = []
+    if args.data_root_path:
+        additional_args.extend(['--data_root_path', args.data_root_path])
     if args.optuna:
         additional_args.append('--optuna')
         if args.n_trials:
