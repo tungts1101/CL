@@ -7,7 +7,22 @@ from torchvision import datasets, transforms
 from utils.toolkit import split_images_labels
 
 
-data_root_path = "/home/lis/data"
+DEFAULT_DATA_ROOT_PATH = "/home/lis/data"
+
+# Global variable that can be overridden
+data_root_path = DEFAULT_DATA_ROOT_PATH
+
+def set_data_root_path(path):
+    """Set the global data root path"""
+    global data_root_path
+    data_root_path = path
+    os.makedirs(data_root_path, exist_ok=True)
+
+def get_data_root_path():
+    """Get the current data root path"""
+    return data_root_path
+
+# Initialize with default path
 os.makedirs(data_root_path, exist_ok=True)
 
 # CUB, ImageNet-R, ImageNet-A, OmnibenchMark and VTAB are the versions defined at https://github.com/zhoudw-zdw/RevisitingCIL from here: 
@@ -317,10 +332,6 @@ class CUB(iData):
         train_dir, test_dir = download_and_extract_dataset("cub", "1XbUpnWpJPnItt5zQ6sHJnsjPncnNLvWb")
 
         train_dset = datasets.ImageFolder(train_dir)
-        test_dset = datasets.ImageFolder(test_dir)
-
-        self.train_data, self.train_targets = split_images_labels(train_dset.imgs)
-        self.test_data, self.test_targets = split_images_labels(test_dset.imgs)
         test_dset = datasets.ImageFolder(test_dir)
 
         self.train_data, self.train_targets = split_images_labels(train_dset.imgs)

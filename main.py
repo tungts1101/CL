@@ -5,6 +5,7 @@ import logging
 import yaml
 from trainer import train
 from trainer_optuna import train as train_optuna
+from utils.data import set_data_root_path, DEFAULT_DATA_ROOT_PATH
 
 def main():
     args = setup_parser().parse_args()
@@ -13,6 +14,14 @@ def main():
     # args.update(param) # Add parameters from json
 
     merged = {**param, **args}
+    
+    # Set data root path priority: command line > JSON config > default
+    data_root = args.get('data_root_path') or param.get('data_root_path') or DEFAULT_DATA_ROOT_PATH
+    set_data_root_path(data_root)
+    print(f"Using data root path: {data_root}")
+    
+    # Add data_root_path to merged config for other components
+    merged['data_root_path'] = data_root
     
     if merged['optuna']:
         pruning_thresholds = load_thresholds_config(
@@ -66,6 +75,8 @@ def setup_parser():
     parser = argparse.ArgumentParser(description='Reproduce of multiple pre-trained incremental learning algorthms.')
     parser.add_argument('--config', type=str, default='./exps/simplecil.json',
                         help='Json file of settings.')
+    parser.add_argument('--data_root_path', type=str, default=None,
+                        help=f'Path to the data root directory. Default: {DEFAULT_DATA_ROOT_PATH}')
     parser.add_argument('--reset', action=argparse.BooleanOptionalAction, default=False,
                         help='Reset the training and start from scratch.')
     parser.add_argument('--lca', action=argparse.BooleanOptionalAction, default=False,
