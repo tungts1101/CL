@@ -19,9 +19,6 @@ def set_data_root_path(path):
 def get_data_root_path():
     return data_root_path
 
-# Initialize with default path
-os.makedirs(data_root_path, exist_ok=True)
-
 # CUB, ImageNet-R, ImageNet-A, OmnibenchMark and VTAB are the versions defined at https://github.com/zhoudw-zdw/RevisitingCIL from here: 
 #   @article{zhou2023revisiting,
 #        author = {Zhou, Da-Wei and Ye, Han-Jia and Zhan, De-Chuan and Liu, Ziwei},

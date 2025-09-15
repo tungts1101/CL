@@ -5,7 +5,7 @@ import logging
 import yaml
 from trainer import train
 from trainer_optuna import train as train_optuna
-from utils.data import set_data_root_path, DEFAULT_DATA_ROOT_PATH
+from utils.data import set_data_root_path, get_data_root_path, DEFAULT_DATA_ROOT_PATH
 
 def main():
     args = setup_parser().parse_args()
@@ -18,7 +18,8 @@ def main():
     data_root = args.get('data_root_path') or param.get('data_root_path') or DEFAULT_DATA_ROOT_PATH
     print(f"Using data root path: {data_root}")
     set_data_root_path(data_root)
-    
+    os.makedirs(get_data_root_path(), exist_ok=True)
+
     if merged['optuna']:
         pruning_thresholds = load_thresholds_config(
             merged.get('model_name'), 
