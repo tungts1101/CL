@@ -506,13 +506,19 @@ class BaseLearner(object):
                 _vectors = _vectors.detach().cpu()
                 vectors.append(_vectors)
 
-            if isinstance(vectors, np.ndarray):
-                features_list = torch.tensor(vectors, dtype=torch.float64)
-            else:
-                features_list = torch.cat(vectors, dim=0).to(torch.float64)
+            # if isinstance(vectors, np.ndarray):
+            #     features_list = torch.tensor(vectors, dtype=torch.float64)
+            # else:
+            #     features_list = torch.cat(vectors, dim=0).to(torch.float64)
             
-            class_mean = torch.mean(features_list, dim=0)
-            class_cov = torch.cov(features_list.T) + torch.eye(class_mean.shape[-1], dtype=torch.float64) * 1e-4
+            # class_mean = torch.mean(features_list, dim=0)
+            # class_cov = torch.cov(features_list.T) + torch.eye(class_mean.shape[-1], dtype=torch.float64) * 1e-4
+
+            class_mean = np.mean(vectors, axis=0)
+            class_cov = np.cov(vectors.T) + np.eye(class_mean.shape[-1]) * 1e-4
+
+            class_mean = torch.tensor(class_mean, dtype=torch.float64)
+            class_cov = torch.tensor(class_cov, dtype=torch.float64)
 
             self._ca_class_means[cls_idx, :] = class_mean
             self._ca_class_covs[cls_idx, ...] = class_cov
@@ -536,7 +542,7 @@ class BaseLearner(object):
         ca_lr = self.args.get("ca_lr", 0.005)
 
         param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
-        logging.info(f"Total trainable parameters: {sum(p.numel() for p in param_list)}")
+        logging.info(f"[Alignment] Total trainable parameters: {sum(p.numel() for p in param_list)}")
         network_params = [{'params': param_list, 'lr': ca_lr, 'weight_decay': 5e-4}]
         optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ca_epochs)
