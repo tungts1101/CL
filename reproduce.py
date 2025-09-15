@@ -39,6 +39,8 @@ def main():
                         help='Enable Optuna optimization for all configs')
     parser.add_argument('--n_trials', type=int, default=100,
                         help='Number of Optuna trials (only used with --optuna)')
+    parser.add_argument("--max_failed_trials", type=int, default=None,
+                        help="Stop after N failed trials")
     parser.add_argument('--early_stop_patience', type=int, default=None,
                         help='Early stop patience for Optuna (only used with --optuna)')
     parser.add_argument('--max_time_hours', type=float, default=None,
@@ -55,6 +57,8 @@ def main():
         additional_args.append('--optuna')
         if args.n_trials:
             additional_args.extend(['--n_trials', str(args.n_trials)])
+        if args.max_failed_trials:
+            additional_args.extend(['--max_failed_trials', str(args.max_failed_trials)])
         if args.early_stop_patience:
             additional_args.extend(['--early_stop_patience', str(args.early_stop_patience)])
         if args.max_time_hours:
