@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from utils.toolkit import tensor2numpy, accuracy
 from scipy.spatial.distance import cdist
 import os
+from utils.inc_net import SimpleVitNet, EaseNet, SLCANet, MOSNet
 
 
 EPSILON = 1e-8
@@ -549,8 +550,8 @@ class BaseLearner(object):
         logit_norm = self.args.get("ca_logit_norm", 0.0)
 
         self._network.to(self._device)
-        if len(self._multiple_gpus) > 1:
-            self._network = nn.DataParallel(self._network, self._multiple_gpus)
+        # if len(self._multiple_gpus) > 1:
+        #     self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._network.eval()
 
         prog_bar = tqdm(range(ca_epochs))
@@ -567,7 +568,15 @@ class BaseLearner(object):
                 x = sampled_data[i : i + batch_size]
                 y = sampled_label[i : i + batch_size]
 
-                outputs = self._network(x, bcb_no_grad=True, fc_only=True)
+                if isinstance(self._network, MOSNet):
+                    outputs = self._network(x, fc_only=True)
+                elif isinstance(self._network, SLCANet):
+                    outputs = self._network(x, bcb_no_grad=True, fc_only=True)
+                elif isinstance(self._network, EaseNet):
+                    outputs = self._network(x)
+                elif isinstance(self._network, SimpleVitNet):
+                    outputs = self._network(x)
+
                 logits = outputs['logits']
                 
                 if logit_norm != 0:
