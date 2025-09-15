@@ -124,11 +124,11 @@ class Learner(BaseLearner):
         self._network.backbone.adapter_update()
 
         self._compute_mean(self._network.backbone)
-        if self._cur_task > 0:
-            if self.args.get("use_ori", False):
+        if self.args.get("use_ori", False):
+            if self._cur_task > 0:
                 self.classifer_align(self._network.backbone)
-            else:
-                self.classifier_alignment(self.data_manager)
+        else:
+            self.classifier_alignment(self.data_manager)
 
     def get_optimizer(self, model):
         base_params = [p for name, p in model.named_parameters() if 'adapter' in name and p.requires_grad]
