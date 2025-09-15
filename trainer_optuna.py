@@ -29,15 +29,18 @@ def suggest_hyperparameters(trial):
     entropy_weight_log = trial.suggest_float("entropy_weight_log", -2, 2)
     entropy_weight = 10**entropy_weight_log
 
+    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 1.0)
+
     ca_lr = round(ca_lr, 5)
     robust_weight = round(robust_weight, 5)
     entropy_weight = round(entropy_weight, 5)
+    ca_logit_norm = round(ca_logit_norm, 2)
 
     return {
         "ca_lr": ca_lr,
         "ca_robust_weight": robust_weight,
         "ca_entropy_weight": entropy_weight,
-        "ca_logit_norm": 0.1
+        "ca_logit_norm": ca_logit_norm
     }
 
 
@@ -228,8 +231,6 @@ def run_optuna_optimization(
     max_time_hours=None,
     data_manager=None,
 ):
-    optimization_start_time = time.time()
-
     log_dir = f"logs/optuna/{base_args['dataset']}/{base_args['model_name']}"
     os.makedirs(log_dir, exist_ok=True)
 
@@ -293,16 +294,6 @@ def run_optuna_optimization(
                     )
                     study.stop()
 
-        if max_time_hours is not None:
-            elapsed_time = time.time() - optimization_start_time
-            elapsed_hours = elapsed_time / 3600
-            if elapsed_hours >= max_time_hours:
-                logging.info(
-                    f"Early stopping: Time limit reached! Elapsed: {elapsed_hours:.2f}/{max_time_hours} hours"
-                )
-                study.stop()
-                return
-
     try:
         callbacks = [early_stopping_callback]
         
@@ -312,6 +303,7 @@ def run_optuna_optimization(
             ),
             n_trials=n_trials,
             callbacks=callbacks,
+            timeout=max_time_hours * 3600 if max_time_hours is not None else None
         )
 
         return study
