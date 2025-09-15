@@ -1,4 +1,5 @@
 import logging
+import os
 import numpy as np
 import torch
 from torch import nn
@@ -94,13 +95,26 @@ class Learner(BaseLearner):
         train_dataset_for_protonet = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source="train", mode="test", )
         self.train_loader_for_protonet = DataLoader(train_dataset_for_protonet, batch_size=self.batch_size, shuffle=True, num_workers=num_workers)
 
-        if len(self._multiple_gpus) > 1:
-            print('Multiple GPUs')
-            self._network = nn.DataParallel(self._network, self._multiple_gpus)
-        self._train(self.train_loader, self.test_loader, self.train_loader_for_protonet)
+        filename = self.checkpoint_path(self._cur_task)
+        if os.path.exists(filename) and not self.args['reset']:
+            saved = torch.load(filename)
+            assert saved["tasks"] == self._cur_task
+            self._network.cpu()
+            self._network.load_state_dict(saved["model_state_dict"])
+        else:
+            if len(self._multiple_gpus) > 1:
+                print('Multiple GPUs')
+                self._network = nn.DataParallel(self._network, self._multiple_gpus)
+            self._train(self.train_loader, self.test_loader, self.train_loader_for_protonet)
 
-        if len(self._multiple_gpus) > 1:
-            self._network = self._network.module
+            if len(self._multiple_gpus) > 1:
+                self._network = self._network.module
+            
+            self.save_checkpoint(filename)
+        
+        self._network.to(self._device)
+        if not self.args.get("use_ori", False):
+            self.classifier_alignment(self.data_manager)
 
     def _train(self, train_loader, test_loader, train_loader_for_protonet):
         self._network.to(self._device)
