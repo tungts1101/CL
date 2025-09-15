@@ -466,6 +466,11 @@ class BaseLearner(object):
                 self._class_covs[class_idx, ...] = class_cov
 
     def classifier_alignment(self, data_manager):
+        self._network.to(self._device)
+        # if len(self._multiple_gpus) > 1:
+        #     self._network = nn.DataParallel(self._network, self._multiple_gpus)
+        self._network.eval()
+
         logging.info(
             f"[Alignment] Compute class mean and cov for classes {self._known_classes} - {self._total_classes - 1}"
         )
@@ -486,7 +491,20 @@ class BaseLearner(object):
             data, targets, idx_dataset = data_manager.get_dataset(np.arange(cls_idx, cls_idx+1), source='train',
                                                                   mode='test', ret_data=True)
             idx_loader = DataLoader(idx_dataset, batch_size=64, shuffle=False, num_workers=4)
-            vectors, _ = self._extract_vectors(idx_loader)
+            # vectors, _ = self._extract_vectors(idx_loader)
+
+            vectors = []
+            for _, _inputs, _targets in idx_loader:
+                if isinstance(self._network, MOSNet):
+                    _vectors = self._network(_inputs.to(self._device), adapter_id=self._cur_task, train=True)["features"]
+                elif isinstance(self._network, SLCANet):
+                    _vectors = self._network(_inputs.to(self._device), bcb_no_grad=True, fc_only=False)["features"]
+                elif isinstance(self._network, EaseNet):
+                    _vectors = self._network(_inputs.to(self._device))["features"]
+                elif isinstance(self._network, SimpleVitNet):
+                    _vectors = self._network(_inputs.to(self._device))["features"]
+                _vectors = _vectors.detach().cpu()
+                vectors.append(_vectors)
 
             if isinstance(vectors, np.ndarray):
                 features_list = torch.tensor(vectors, dtype=torch.float64)
@@ -510,8 +528,22 @@ class BaseLearner(object):
         from torch import optim
         from tqdm import tqdm
 
+        # Create optimizer
         for p in self._network.fc.parameters():
             p.requires_grad=True
+
+        ca_epochs = self.args.get("crct_epochs", 10)
+        ca_lr = self.args.get("ca_lr", 0.005)
+
+        param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
+        logging.info(f"Total trainable parameters: {sum(p.numel() for p in param_list)}")
+        network_params = [{'params': param_list, 'lr': ca_lr, 'weight_decay': 5e-4}]
+        optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ca_epochs)
+
+        robust_weight_base = self.args.get("ca_robust_weight", 0.0)
+        entropy_weight = self.args.get("ca_entropy_weight", 0.0)
+        logit_norm = self.args.get("ca_logit_norm", 0.0)
 
         # Sample data by using gaussian dist
         sampled_data = []
@@ -534,25 +566,6 @@ class BaseLearner(object):
 
         inputs = sampled_data
         targets = sampled_label
-
-        # Create optimizer
-        ca_epochs = self.args.get("crct_epochs", 10)
-        ca_lr = self.args.get("ca_lr", 0.005)
-
-        param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
-        logging.info(f"Total trainable parameters: {sum(p.numel() for p in param_list)}")
-        network_params = [{'params': param_list, 'lr': ca_lr, 'weight_decay': 5e-4}]
-        optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ca_epochs)
-
-        robust_weight_base = self.args.get("ca_robust_weight", 0.0)
-        entropy_weight = self.args.get("ca_entropy_weight", 0.0)
-        logit_norm = self.args.get("ca_logit_norm", 0.0)
-
-        self._network.to(self._device)
-        # if len(self._multiple_gpus) > 1:
-        #     self._network = nn.DataParallel(self._network, self._multiple_gpus)
-        self._network.eval()
 
         prog_bar = tqdm(range(ca_epochs))
         for _ in prog_bar:
