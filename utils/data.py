@@ -9,17 +9,14 @@ from utils.toolkit import split_images_labels
 
 DEFAULT_DATA_ROOT_PATH = "/home/lis/data"
 
-# Global variable that can be overridden
 data_root_path = DEFAULT_DATA_ROOT_PATH
 
 def set_data_root_path(path):
-    """Set the global data root path"""
     global data_root_path
     data_root_path = path
     os.makedirs(data_root_path, exist_ok=True)
 
 def get_data_root_path():
-    """Get the current data root path"""
     return data_root_path
 
 # Initialize with default path

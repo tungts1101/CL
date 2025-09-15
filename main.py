@@ -15,13 +15,9 @@ def main():
 
     merged = {**param, **args}
     
-    # Set data root path priority: command line > JSON config > default
     data_root = args.get('data_root_path') or param.get('data_root_path') or DEFAULT_DATA_ROOT_PATH
-    set_data_root_path(data_root)
     print(f"Using data root path: {data_root}")
-    
-    # Add data_root_path to merged config for other components
-    merged['data_root_path'] = data_root
+    set_data_root_path(data_root)
     
     if merged['optuna']:
         pruning_thresholds = load_thresholds_config(
