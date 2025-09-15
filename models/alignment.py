@@ -81,7 +81,7 @@ class AlignmentLearner(BaseMergingLearner):
                 self._cls_means[cls_idx, :] = class_mean
                 self._cls_covs[cls_idx, ...] = class_cov
         
-        if self.args["train_merge_method"] != "none":
+        if self.args["train_merge"] != "none":
             self.merge()
         
         if self._cur_task == 0:
