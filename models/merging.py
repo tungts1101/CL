@@ -236,8 +236,9 @@ class BaseMergingLearner(BaseLearner):
             str(self.args['seed']),
             self.args['dataset'], 
             str(self.args['init_cls']),
-            str(self.args['increment']),
-            self.args['backbone_type']
+            self.args['model_name'],
+            self.args['backbone_type'],
+            self.args['train_ca_method']
         ]
         return "_".join(prefix_parts)
 
