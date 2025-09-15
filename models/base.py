@@ -514,8 +514,43 @@ class BaseLearner(object):
             # class_mean = torch.mean(features_list, dim=0)
             # class_cov = torch.cov(features_list.T) + torch.eye(class_mean.shape[-1], dtype=torch.float64) * 1e-4
 
+            vectors = np.concatenate(vectors)
             class_mean = np.mean(vectors, axis=0)
-            class_cov = np.cov(vectors.T) + np.eye(class_mean.shape[-1]) * 1e-4
+            
+            try:
+                if vectors.shape[0] < 2:
+                    print(f"Warning: Class {cls_idx} has only {vectors.shape[0]} sample(s). Using identity covariance.")
+                    class_cov = np.eye(class_mean.shape[-1]) * 1e-2
+                else:
+                    centered_vectors = vectors - class_mean
+                    
+                    feature_std = np.std(centered_vectors, axis=0)
+                    zero_var_mask = feature_std < 1e-8
+                    
+                    if np.any(zero_var_mask):
+                        print(f"Warning: Class {cls_idx} has {np.sum(zero_var_mask)} zero-variance features. Adding noise.")
+                        noise = np.random.randn(*centered_vectors.shape) * 1e-6
+                        centered_vectors[:, zero_var_mask] += noise[:, zero_var_mask]
+                    
+                    class_cov = np.cov(centered_vectors.T) + np.eye(class_mean.shape[-1]) * 1e-3
+                    
+                    eigenvals = np.linalg.eigvals(class_cov)
+                    min_eigenval = np.min(eigenvals)
+                    
+                    if min_eigenval <= 1e-6:
+                        print(f"Warning: Class {cls_idx} covariance is near-singular (min eigenvalue: {min_eigenval:.2e}). Adding stronger regularization.")
+                        class_cov += np.eye(class_mean.shape[-1]) * (1e-3 - min_eigenval + 1e-6)
+                        
+                    try:
+                        np.linalg.cholesky(class_cov)
+                    except np.linalg.LinAlgError:
+                        print(f"Warning: Class {cls_idx} covariance failed Cholesky decomposition. Using regularized identity.")
+                        class_cov = np.eye(class_mean.shape[-1]) * 1e-2
+                        
+            except Exception as e:
+                print(f"Error computing covariance for class {cls_idx}: {e}")
+                print("Falling back to identity covariance matrix.")
+                class_cov = np.eye(class_mean.shape[-1]) * 1e-2
 
             class_mean = torch.tensor(class_mean, dtype=torch.float64)
             class_cov = torch.tensor(class_cov, dtype=torch.float64)
