@@ -7,3 +7,5 @@ peft==0.15.2
 optuna==4.4.0
 gdown==5.2.0
 kagglehub==0.3.13
+scipy==1.13.1
+easydict==1.13
