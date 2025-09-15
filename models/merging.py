@@ -117,6 +117,16 @@ class BaseMergingLearner(BaseLearner):
                     "weight_decay": weight_decay,
                 },
             ]
+            if self._network.norm is not None:
+                parameters.append(
+                    {
+                        "params": [
+                            p for p in self._network.norm.parameters() if p.requires_grad
+                        ],
+                        "lr": base_lr,
+                        "weight_decay": weight_decay,
+                    }
+                )
             if not freeze_old:
                 parameters.append(
                     {
@@ -190,46 +200,76 @@ class BaseMergingLearner(BaseLearner):
                 torch.load(self.head_checkpoint(self._cur_task)), strict=True
             )
     
+    def load_backbone(self, backbone_params):
+        peft_params = {}
+        norm_params = {}
+        for name, param in backbone_params.items():
+            if name.startswith("norm."):
+                norm_name = name[5:]
+                norm_params[norm_name] = param
+            else:
+                peft_params[name] = param
+        self._network.backbone.load_state_dict(peft_params, strict=False)
+        if norm_params:
+            self._network.norm.load_state_dict(norm_params, strict=True)
+
     def merge(self):
+        if os.path.exists(self.merged_checkpoint(self._cur_task)) and not self.args.get("reset", False):
+            logging.info(f"[Merging] Load merged checkpoint for task {self._cur_task}")
+            backbone_params = torch.load(self.merged_checkpoint(self._cur_task))
+            self.load_backbone(backbone_params)
+            return
+
         if self._cur_task == 0:
+            logging.info(
+                f"[Merging] Save merged backbone checkpoint for task {self._cur_task}"
+            )
             torch.save(
                 self._network.get_backbone_trainable_params(),
-                self.merge_checkpoint(self._cur_task),
+                self.merged_checkpoint(self._cur_task),
             )
             return
-        if (
-            not os.path.exists(self.merge_checkpoint(self._cur_task))
-            or self.args["reset"]
-        ):
-            logging.info(f"[Merging] Method {self.args['train_merge_method']}")
-            base_params = torch.load(self.backbone_checkpoint(-1))
-            num_merged_params = sum(param.numel() for param in base_params.values())
-            logging.info(f"[Merging] Total parameters {num_merged_params:,}")
 
-            if self.args.get("train_merge_incremental", False):
-                task_params = []
-                task_params.append(torch.load(self.merge_checkpoint(self._cur_task - 1)))
-                task_params.append(torch.load(self.backbone_checkpoint(self._cur_task)))
-            else:
-                task_params = [torch.load(self.backbone_checkpoint(task)) for task in range(self._cur_task + 1)]
-            logging.info(f"[Merging] Loaded {len(task_params)} tasks")
-            backbone_params = merge(
-                base_params,
-                task_params,
-                method=self.args["train_merge_method"],
-                lamb=self.args["train_merge_coef"],
-                topk=self.args["train_merge_topk"],
-            )
-            self._network.backbone.load_state_dict(backbone_params, strict=False)
+        logging.info(f"[Merging] Method {self.args['train_merge']}")
+        base_params = torch.load(self.backbone_checkpoint(-1))
+        num_merged_params = sum(param.numel() for param in base_params.values())
+        logging.info(f"[Merging] Merging with {num_merged_params:,} total parameters")
 
-            torch.save(
-                self._network.get_backbone_trainable_params(),
-                self.merge_checkpoint(self._cur_task),
-            )
+        if self.args.get("train_merge_incremental", False):
+            task_params = []
+            task_params.append(torch.load(self.merged_checkpoint(self._cur_task - 1)))
+            task_params.append(torch.load(self.backbone_checkpoint(self._cur_task)))
         else:
-            logging.info(f"[Merging] Load existing merged model for task {self._cur_task}")
-            merged_params = torch.load(self.merge_checkpoint(self._cur_task))
-            self._network.backbone.load_state_dict(merged_params, strict=False)
+            task_params = [
+                torch.load(self.backbone_checkpoint(task))
+                for task in range(self._cur_task + 1)
+            ]
+        logging.info(f"[Merging] Loaded {len(task_params)} tasks for merging")
+
+        # logging.info("[Merging] Norm layer values BEFORE merging:")
+        # logging.info(f"  norm.weight: mean={self._network.norm.weight.data.mean():.6f}, std={self._network.norm.weight.data.std():.6f}")
+        # logging.info(f"  norm.bias: mean={self._network.norm.bias.data.mean():.6f}, std={self._network.norm.bias.data.std():.6f}")
+
+        backbone_params = merge(
+            base_params,
+            task_params,
+            method=self.args["train_merge"],
+            lamb=self.args["train_merge_coef"],
+            topk=self.args["train_merge_topk"],
+        )
+        self.load_backbone(backbone_params)
+
+        # logging.info("[Merging] Norm layer values AFTER merging:")
+        # logging.info(f"  norm.weight: mean={self._network.norm.weight.data.mean():.6f}, std={self._network.norm.weight.data.std():.6f}")
+        # logging.info(f"  norm.bias: mean={self._network.norm.bias.data.mean():.6f}, std={self._network.norm.bias.data.std():.6f}")
+
+        logging.info(
+            f"[Merging] Save merged backbone checkpoint for task {self._cur_task}"
+        )
+        torch.save(
+            self._network.get_backbone_trainable_params(),
+            self.merged_checkpoint(self._cur_task),
+        )
     
     def prefix(self):
         prefix_parts = [
@@ -250,6 +290,6 @@ class BaseMergingLearner(BaseLearner):
         filename = f"{self.prefix()}_head_{task}.pt"
         return os.path.join(self.CHECKPOINT_DIR, filename)
 
-    def merge_checkpoint(self, task):
-        filename = f"{self.prefix()}_merge_{task}.pt"
+    def merged_checkpoint(self, task):
+        filename = f"{self.prefix()}_merged_{task}.pt"
         return os.path.join(self.CHECKPOINT_DIR, filename)

@@ -29,6 +29,7 @@
     "train_merge_method": "ties",
     "train_merge_coef": 1.0,
     "train_merge_topk": 100,
+    "train_merge_incremental": true,
     
     "train_ca_method": "nes",
     "train_ca_nes_iterations": 200,

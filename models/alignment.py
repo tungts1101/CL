@@ -88,7 +88,7 @@ class AlignmentLearner(BaseMergingLearner):
             return
 
         if (
-            os.path.exists(self.merge_checkpoint(self._cur_task))
+            os.path.exists(self.head_alignment_checkpoint(self._cur_task))
             and not self.args["reset"]
         ):
             logging.info(
