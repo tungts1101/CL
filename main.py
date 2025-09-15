@@ -82,6 +82,8 @@ def setup_parser():
                         help='Use optuna for hyperparameter optimization.')
     parser.add_argument("--n_trials", type=int, default=100,
                         help="Number of optimization trials")
+    parser.add_argument("--max_failed_trials", type=int, default=None,
+                        help="Stop after N failed trials")
     parser.add_argument("--early_stop_patience", type=int, default=20,
                         help="Stop after N trials without improvement")
     parser.add_argument("--max_time_hours", type=float, default=None,

@@ -229,6 +229,7 @@ def run_optuna_optimization(
     n_trials=100,
     early_stop_patience=None,
     max_time_hours=None,
+    max_failed_trials=None,  # New parameter for early stopping on total failed trials
     data_manager=None,
 ):
     log_dir = f"logs/optuna/{base_args['dataset']}/{base_args['model_name']}"
@@ -252,6 +253,12 @@ def run_optuna_optimization(
 
     logging.info(f"Starting Optuna optimization: {study_name}")
     logging.info(f"Number of trials: {n_trials}")
+    if early_stop_patience is not None:
+        logging.info(f"Early stopping patience (no improvement): {early_stop_patience}")
+    if max_failed_trials is not None:
+        logging.info(f"Early stopping on total failed trials: {max_failed_trials}")
+    if max_time_hours is not None:
+        logging.info(f"Maximum optimization time: {max_time_hours} hours")
 
     sampler = TPESampler(seed=base_args["seed"])
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=2)
@@ -272,12 +279,41 @@ def run_optuna_optimization(
 
     logging.info(f"Storage: {storage_name}")
 
-    best_value = -float('inf')
+    try:
+        best_value = study.best_value if study.best_value is not None else -float("inf")
+        if best_value != -float("inf"):
+            logging.info(f"Resuming study with existing best value: {best_value:.2f}")
+    except ValueError:
+        best_value = -float("inf")
+        logging.info("Starting fresh study (no previous trials found)")
+
     min_delta = 0.01
     no_improvement_trials = 0
+    
+    total_failed_trials = 0
+    if len(study.trials) > 0:
+        total_failed_trials = sum(1 for trial in study.trials 
+                                if trial.state in [optuna.trial.TrialState.FAIL, optuna.trial.TrialState.PRUNED])
+        logging.info(f"Resuming study: {len(study.trials)} existing trials, {total_failed_trials} failed/pruned")
 
     def early_stopping_callback(study, trial):
-        nonlocal best_value, no_improvement_trials, min_delta
+        nonlocal best_value, no_improvement_trials, min_delta, total_failed_trials
+        
+        # Check for total failed trials early stopping
+        if max_failed_trials is not None:
+            if trial is not None and trial.state in [optuna.trial.TrialState.FAIL, optuna.trial.TrialState.PRUNED]:
+                total_failed_trials += 1
+                logging.info(
+                    f"Trial {trial.number} failed/pruned. Total failed trials: {total_failed_trials}/{max_failed_trials}"
+                )
+                if total_failed_trials >= max_failed_trials:
+                    logging.info(
+                        f"Early stopping: {total_failed_trials} total failed trials reached."
+                    )
+                    study.stop()
+                    return
+        
+        # Original early stopping logic for no improvement
         if trial is not None and trial.state == optuna.trial.TrialState.COMPLETE:
             if trial.value is not None and trial.value - min_delta > best_value:
                 best_value = trial.value
@@ -368,6 +404,7 @@ def train(args, pruning_thresholds=None):
         n_trials = args.get("n_trials", 100)
         early_stop_patience = args.get("early_stop_patience", None)
         max_time_hours = args.get("max_time_hours", None)
+        max_failed_trials = args.get("max_failed_trials", None)
 
         run_optuna_optimization(
             base_args=args,
@@ -376,5 +413,6 @@ def train(args, pruning_thresholds=None):
             n_trials=n_trials,
             early_stop_patience=early_stop_patience,
             max_time_hours=max_time_hours,
+            max_failed_trials=max_failed_trials,
             data_manager=data_manager,
         )
