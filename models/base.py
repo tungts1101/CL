@@ -534,7 +534,13 @@ class BaseLearner(object):
         ca_epochs = self.args.get("crct_epochs", 10)
         ca_lr = self.args.get("ca_lr", 0.005)
 
-        param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
+        if isinstance(self._network, MOSNet):
+            logging.info("[Alignment] Finetune the backbone (ViT + Classifier) with MOS")
+            param_list = [p for n, p in self._network.backbone.named_parameters() if p.requires_grad and 'adapter' not in n]
+        else:
+            logging.info("[Alignment] Finetune the classifier only")
+            param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
+
         logging.info(f"[Alignment] Total trainable parameters: {sum(p.numel() for p in param_list)}")
         network_params = [{'params': param_list, 'lr': ca_lr, 'weight_decay': 5e-4}]
         optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
@@ -582,14 +588,16 @@ class BaseLearner(object):
 
                 if isinstance(self._network, MOSNet):
                     outputs = self._network(x, fc_only=True)
+                    logits = outputs['logits'][:, :self._total_classes]
                 elif isinstance(self._network, SLCANet):
                     outputs = self._network(x, bcb_no_grad=True, fc_only=True)
+                    logits = outputs['logits']
                 elif isinstance(self._network, EaseNet):
                     outputs = self._network(x)
+                    logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
                     outputs = self._network(x)
-
-                logits = outputs['logits']
+                    logits = outputs['logits']
                 
                 if logit_norm != 0:
                     batch_size = logits.size(0)
