@@ -611,11 +611,8 @@ class BaseLearner(object):
                     outputs = self._network(x)
                     logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
-                    if self.args["use_RP"] and self._network.W_rand is not None:
-                        x = torch.nn.functional.relu(x @ self._network.W_rand)
-                    logits = self._network.fc(x)
-                
-                logits = torch.clamp(logits, -5, 5)
+                    outputs = self._network(x)
+                    logits = outputs['logits']
 
                 if logit_norm != 0:
                     batch_size = logits.size(0)
