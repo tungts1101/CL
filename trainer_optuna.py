@@ -22,14 +22,14 @@ def suggest_hyperparameters(trial):
     ca_lr = trial.suggest_float("train_ca_lr", 1e-4, 1e-2)
 
     # robust_weight_log = trial.suggest_categorical("robust_weight_log", [-4, -3, -2, -1, 0, 1, 2, 3, 4])
-    robust_weight_log = trial.suggest_float("robust_weight_log", -3, 3)
+    robust_weight_log = trial.suggest_float("robust_weight_log", -2, 1)
     robust_weight = 10**robust_weight_log
 
     # entropy_weight_log = trial.suggest_categorical("entropy_weight_log", [-2, -1, 0, 1, 2])
-    entropy_weight_log = trial.suggest_float("entropy_weight_log", -2, 2)
+    entropy_weight_log = trial.suggest_float("entropy_weight_log", -2, 1)
     entropy_weight = 10**entropy_weight_log
 
-    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 1.0)
+    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 0.5)
 
     ca_lr = round(ca_lr, 5)
     robust_weight = round(robust_weight, 5)

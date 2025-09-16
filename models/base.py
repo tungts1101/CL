@@ -530,9 +530,6 @@ class BaseLearner(object):
         from tqdm import tqdm
 
         # Create optimizer
-        for p in self._network.fc.parameters():
-            p.requires_grad=True
-
         ca_epochs = self.args.get("crct_epochs", 10)
         ca_lr = self.args.get("ca_lr", 0.005)
 
@@ -540,6 +537,8 @@ class BaseLearner(object):
             logging.info("[Alignment] Finetune the backbone (ViT + Classifier) with MOS")
             param_list = [p for n, p in self._network.backbone.named_parameters() if p.requires_grad and 'adapter' not in n]
         else:
+            for p in self._network.fc.parameters():
+                p.requires_grad=True
             logging.info("[Alignment] Finetune the classifier only")
             param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
 
