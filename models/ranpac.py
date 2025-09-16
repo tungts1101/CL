@@ -95,34 +95,6 @@ class Learner(BaseLearner):
         train_dataset_for_protonet = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source="train", mode="test", )
         self.train_loader_for_protonet = DataLoader(train_dataset_for_protonet, batch_size=self.batch_size, shuffle=True, num_workers=num_workers)
 
-        filename = self.checkpoint_path(self._cur_task)
-        if os.path.exists(filename) and not self.args['reset']:
-            saved = torch.load(filename)
-            assert saved["tasks"] == self._cur_task
-            if self._cur_task == 0 and self.args["use_RP"]:
-                self.setup_RP()
-                self.W_rand = saved["W_rand"]
-                self._network.W_rand = self.W_rand
-
-            self._network.cpu()
-            self._network.load_state_dict(saved["model_state_dict"])
-        else:
-            if len(self._multiple_gpus) > 1:
-                print('Multiple GPUs')
-                self._network = nn.DataParallel(self._network, self._multiple_gpus)
-            self._train(self.train_loader, self.test_loader, self.train_loader_for_protonet)
-
-            if len(self._multiple_gpus) > 1:
-                self._network = self._network.module
-            
-            inc_save_dict = None
-            if self.args["use_RP"]:
-                inc_save_dict = {
-                    "W_rand": self.W_rand if self.args["use_RP"] else None,
-                }
-
-            self.save_checkpoint(filename, inc_save_dict)
-        
         self._network.to(self._device)
         if not self.args.get("use_ori", False):
             self.classifier_alignment(self.data_manager)
@@ -157,22 +129,31 @@ class Learner(BaseLearner):
         self._network.to(self._device)
         
         if self._cur_task == 0:
-            # show total parameters and trainable parameters
-            total_params = sum(p.numel() for p in self._network.parameters())
-            print(f'{total_params:,} total parameters.')
-            total_trainable_params = sum(
-                p.numel() for p in self._network.parameters() if p.requires_grad)
-            print(f'{total_trainable_params:,} training parameters.')
-            if total_params != total_trainable_params:
-                for name, param in self._network.named_parameters():
-                    if param.requires_grad:
-                        print(name, param.numel())
-            if self.args['optimizer'] == 'sgd':
-                optimizer = optim.SGD(self._network.parameters(), momentum=0.9, lr=self.init_lr,weight_decay=self.weight_decay)
-            elif self.args['optimizer'] == 'adam':
-                optimizer = optim.AdamW(self._network.parameters(), lr=self.init_lr, weight_decay=self.weight_decay)
-            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args['tuned_epoch'], eta_min=self.min_lr)
-            self._init_train(train_loader, test_loader, optimizer, scheduler)
+            filename = self.checkpoint_path(self._cur_task)
+            if os.path.exists(filename) and not self.args['reset']:
+                saved = torch.load(filename)
+                assert saved["tasks"] == self._cur_task
+                self._network.cpu()
+                self._network.load_state_dict(saved["model_state_dict"])
+                self._network.to(self._device)
+            else:
+                # show total parameters and trainable parameters
+                total_params = sum(p.numel() for p in self._network.parameters())
+                print(f'{total_params:,} total parameters.')
+                total_trainable_params = sum(
+                    p.numel() for p in self._network.parameters() if p.requires_grad)
+                print(f'{total_trainable_params:,} training parameters.')
+                if total_params != total_trainable_params:
+                    for name, param in self._network.named_parameters():
+                        if param.requires_grad:
+                            print(name, param.numel())
+                if self.args['optimizer'] == 'sgd':
+                    optimizer = optim.SGD(self._network.parameters(), momentum=0.9, lr=self.init_lr,weight_decay=self.weight_decay)
+                elif self.args['optimizer'] == 'adam':
+                    optimizer = optim.AdamW(self._network.parameters(), lr=self.init_lr, weight_decay=self.weight_decay)
+                scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args['tuned_epoch'], eta_min=self.min_lr)
+                self._init_train(train_loader, test_loader, optimizer, scheduler)
+                self.save_checkpoint(filename)
         else:
             pass
         if self._cur_task == 0 and self.args["use_RP"]:
