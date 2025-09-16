@@ -561,8 +561,21 @@ class BaseLearner(object):
             mean = self._ca_class_means[class_idx].to(self._device)
             cov = self._ca_class_covs[class_idx].to(self._device)
 
-            m = MultivariateNormal(mean.float(), cov.float())
-            sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+            # m = MultivariateNormal(mean.float(), cov.float())
+            # sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+
+            try:
+                m = MultivariateNormal(mean, covariance_matrix=cov)
+                sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+            except Exception as e:
+                logging.warning(f"[Sampling] Invalid covariance at class {class_idx}, fallback to diag. Error: {e}")
+                diag_cov = torch.diag(torch.clamp(torch.diag(cov), min=1e-6))
+                m = MultivariateNormal(mean, covariance_matrix=diag_cov)
+                sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+
+            sampled_data_single = torch.nan_to_num(
+                sampled_data_single, nan=0.0, posinf=1e6, neginf=-1e6
+            )
 
             sampled_data.append(sampled_data_single)
             sampled_label.extend([class_idx] * num_sampled_pcls)
