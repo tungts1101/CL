@@ -543,7 +543,7 @@ class BaseLearner(object):
             logging.info("[Alignment] Finetune the classifier only")
             param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
 
-        logging.info(f"[Alignment] Total trainable parameters: {sum(p.numel() for p in param_list)}")
+        logging.info(f"[Alignment] Total trainable parameters: {sum(p.numel() for p in param_list):,}")
         network_params = [{'params': param_list, 'lr': ca_lr, 'weight_decay': 5e-4}]
         optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ca_epochs)
