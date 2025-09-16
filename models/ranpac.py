@@ -99,6 +99,8 @@ class Learner(BaseLearner):
         if os.path.exists(filename) and not self.args['reset']:
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
+            if self._cur_task == 0 and self.args["use_RP"]:
+                self.setup_RP()
             self._network.cpu()
             self._network.load_state_dict(saved["model_state_dict"])
         else:
