@@ -379,7 +379,7 @@ class vtab(iData):
 
     def download_data(self):
         # as per Zhou et al (2013), download from https://drive.google.com/file/d/1xUiwlnx4k0oDhYi26KL5KwrCAya-mvJ_/view?usp=sharing) or Onedrive: [link](https://entuedu-my.sharepoint.com/:u:/g/personal/n2207876b_e_ntu_edu_sg/EQyTP1nOIH5PrfhXtpPgKQ8BlEFW2Erda1t7Kdi3Al-ePw?e=Yt4RnV
-        train_dir, test_dir = download_and_extract_dataset("vtab", "1xUiwlnx4k0oDhYi26KL5KwrCAya-mvJ_", train_subdir="vtab/train", test_subdir="vtab/test")
+        train_dir, test_dir = download_and_extract_dataset("vtab", "1xUiwlnx4k0oDhYi26KL5KwrCAya-mvJ_")
 
         train_dset = datasets.ImageFolder(train_dir)
         test_dset = datasets.ImageFolder(test_dir)
