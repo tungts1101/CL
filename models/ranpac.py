@@ -103,6 +103,7 @@ class Learner(BaseLearner):
                 self.setup_RP()
             self._network.cpu()
             self._network.load_state_dict(saved["model_state_dict"])
+            self.W_rand = saved["W_rand"]
         else:
             if len(self._multiple_gpus) > 1:
                 print('Multiple GPUs')
@@ -112,7 +113,13 @@ class Learner(BaseLearner):
             if len(self._multiple_gpus) > 1:
                 self._network = self._network.module
             
-            self.save_checkpoint(filename)
+            inc_save_dict = None
+            if self.args["use_RP"]:
+                inc_save_dict = {
+                    "W_rand": self.W_rand if self.args["use_RP"] else None,
+                }
+
+            self.save_checkpoint(filename, inc_save_dict)
         
         self._network.to(self._device)
         if not self.args.get("use_ori", False):

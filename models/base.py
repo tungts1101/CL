@@ -109,12 +109,14 @@ class BaseLearner(object):
         filename = "{}_{}.pkl".format(self.prefix(), task)
         return os.path.join(CHECKPOINT_DIR, filename)
 
-    def save_checkpoint(self, filename):
+    def save_checkpoint(self, filename, inc_save_dict=None):
         self._network.cpu()
         save_dict = {
             "tasks": self._cur_task,
             "model_state_dict": self._network.state_dict(),
         }
+        if inc_save_dict is not None:
+            save_dict.update(inc_save_dict)
         torch.save(save_dict, filename)
 
     def after_task(self):
