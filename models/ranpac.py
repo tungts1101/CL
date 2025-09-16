@@ -95,35 +95,13 @@ class Learner(BaseLearner):
         train_dataset_for_protonet = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source="train", mode="test", )
         self.train_loader_for_protonet = DataLoader(train_dataset_for_protonet, batch_size=self.batch_size, shuffle=True, num_workers=num_workers)
 
-        self._network.to(self._device)
+        if len(self._multiple_gpus) > 1:
+            print('Multiple GPUs')
+            self._network = nn.DataParallel(self._network, self._multiple_gpus)
+        self._train(self.train_loader, self.test_loader, self.train_loader_for_protonet)
+        
         if not self.args.get("use_ori", False):
             self.classifier_alignment(self.data_manager)
-    
-    def save_network(self):
-        filename = self.checkpoint_path(0)
-        torch.save(self._network.state_dict(), filename)
-    
-    def load_network(self):
-        filename = self.checkpoint_path(0)
-        self._network.load_state_dict(torch.load(filename))
-    
-    def save_fc(self):
-        filename = self.checkpoint_path(self._cur_task).replace('.pkl', '_fc.pkl')
-        save_dict = {
-            "fc_weight": self._network.fc.weight.data.cpu(),
-            "fc_bias": self._network.fc.bias.data.cpu() if self._network.fc.bias is not None else None,
-            "w_rand": self.W_rand.cpu() if self.args["use_RP"] else None,
-        }
-        torch.save(save_dict, filename)
-    
-    def load_fc(self):
-        filename = self.checkpoint_path(self._cur_task).replace('.pkl', '_fc.pkl')
-        saved = torch.load(filename)
-        self._network.fc.weight.data = saved["fc_weight"].to(self._device)
-        if self._network.fc.bias is not None and saved["fc_bias"] is not None:
-            self._network.fc.bias.data = saved["fc_bias"].to(self._device)
-        if self.args["use_RP"] and saved["w_rand"] is not None:
-            self.W_rand = saved["w_rand"].to(self._device)
 
     def _train(self, train_loader, test_loader, train_loader_for_protonet):
         self._network.to(self._device)
