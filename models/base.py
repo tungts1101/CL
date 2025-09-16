@@ -477,7 +477,7 @@ class BaseLearner(object):
             f"[Alignment] Compute class mean and cov for classes {self._known_classes} - {self._total_classes - 1}"
         )
         total_class = self._total_classes
-        feature_dim = self._network.feature_dim if not self.args["use_RP"] else self.args["M"]
+        feature_dim = self._network.feature_dim if not self.args.get("use_RP", False) else self.args["M"]
         if not hasattr(self, "_ca_class_means") or not hasattr(self, "_ca_class_covs"):
             self._ca_class_means = torch.zeros((total_class, feature_dim))
             self._ca_class_covs = torch.zeros((total_class, feature_dim, feature_dim))
@@ -611,7 +611,7 @@ class BaseLearner(object):
                     outputs = self._network(x)
                     logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
-                    outputs = self._network(x)
+                    outputs = self._network.fc(x)
                     logits = outputs['logits']
 
                 if logit_norm != 0:
