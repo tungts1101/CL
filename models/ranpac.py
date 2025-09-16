@@ -99,7 +99,7 @@ class Learner(BaseLearner):
             print('Multiple GPUs')
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader, self.train_loader_for_protonet)
-        
+
         if not self.args.get("use_ori", False):
             self.classifier_alignment(self.data_manager)
 
@@ -132,6 +132,7 @@ class Learner(BaseLearner):
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args['tuned_epoch'], eta_min=self.min_lr)
                 self._init_train(train_loader, test_loader, optimizer, scheduler)
                 self.save_checkpoint(filename)
+                self._network.to(self._device)
         else:
             pass
         if self._cur_task == 0 and self.args["use_RP"]:
