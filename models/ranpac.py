@@ -101,9 +101,11 @@ class Learner(BaseLearner):
             assert saved["tasks"] == self._cur_task
             if self._cur_task == 0 and self.args["use_RP"]:
                 self.setup_RP()
+                self.W_rand = saved["W_rand"]
+                self._network.W_rand = self.W_rand
+
             self._network.cpu()
             self._network.load_state_dict(saved["model_state_dict"])
-            self.W_rand = saved["inc_save_dict"]["W_rand"]
         else:
             if len(self._multiple_gpus) > 1:
                 print('Multiple GPUs')
