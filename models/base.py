@@ -534,6 +534,7 @@ class BaseLearner(object):
         ca_lr = self.args.get("ca_lr", 0.005)
 
         if isinstance(self._network, MOSNet):
+            self._network.backbone.train()
             logging.info("[Alignment] Finetune the backbone (ViT + Classifier) with MOS")
             param_list = [p for n, p in self._network.backbone.named_parameters() if p.requires_grad and 'adapter' not in n]
         else:
@@ -610,8 +611,9 @@ class BaseLearner(object):
                     outputs = self._network(x)
                     logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
-                    outputs = self._network(x)
-                    logits = outputs['logits']
+                    if self.args["use_RP"] and self._network.W_rand is not None:
+                        x = torch.nn.functional.relu(x @ self._network.W_rand)
+                    logits = self._network.fc(x)
                 
                 logits = torch.clamp(logits, -5, 5)
 
