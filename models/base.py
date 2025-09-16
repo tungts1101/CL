@@ -600,6 +600,8 @@ class BaseLearner(object):
                     outputs = self._network(x)
                     logits = outputs['logits']
                 
+                logits = torch.clamp(logits, -5, 5)
+
                 if logit_norm != 0:
                     batch_size = logits.size(0)
                     num_tasks = self._cur_task + 1
