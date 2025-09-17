@@ -287,7 +287,7 @@ def run_optuna_optimization(
         best_value = -float("inf")
         logging.info("Starting fresh study (no previous trials found)")
 
-    min_delta = 0.01
+    min_delta = 0.00
     no_improvement_trials = 0
     
     total_failed_trials = 0
@@ -314,8 +314,8 @@ def run_optuna_optimization(
                     return
         
         # Original early stopping logic for no improvement
-        if trial is not None:
-            if trial.state == optuna.trial.TrialState.COMPLETE and trial.value is not None and trial.value - min_delta > best_value:
+        if trial is not None and trial.state == optuna.trial.TrialState.COMPLETE:
+            if  trial.value is not None and trial.value - min_delta > best_value:
                 best_value = trial.value
                 no_improvement_trials = 0
                 logging.info(f"New best value: {best_value:.2f} at trial {trial.number}")
