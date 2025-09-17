@@ -44,7 +44,7 @@ def suggest_hyperparameters(trial):
     }
 
 
-def objective(trial, base_args, study_name, pruning_thresholds=None, data_manager=None):
+def objective(study, trial, base_args, study_name, pruning_thresholds=None, data_manager=None):
     trial_start_time = time.time()
 
     try:
@@ -60,7 +60,7 @@ def objective(trial, base_args, study_name, pruning_thresholds=None, data_manage
             f"\n[Trial {trial.number}] Start optimization with hyperparameters: {hyperparams}"
         )
 
-        result = _train_optuna(args, trial, pruning_thresholds, data_manager)
+        result = _train_optuna(args, study, trial, pruning_thresholds, data_manager)
 
         trial_end_time = time.time()
         trial_duration = trial_end_time - trial_start_time
@@ -101,7 +101,7 @@ def objective(trial, base_args, study_name, pruning_thresholds=None, data_manage
         return 0.0
 
 
-def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
+def _train_optuna(args, study, trial, pruning_thresholds=None, data_manager=None):
     if data_manager is None:
         _set_random(args["seed"])
         _set_device(args)
@@ -175,6 +175,13 @@ def _train_optuna(args, trial, pruning_thresholds=None, data_manager=None):
             if current_avg_accuracy < threshold:
                 logging.info(
                     f"[Pruning] Accuracy {current_avg_accuracy:.2f} < {threshold:.2f} at task {task}"
+                )
+                raise optuna.TrialPruned()
+        
+        if study is not None and study.best_value is not None:
+            if current_avg_accuracy < study.best_value:
+                logging.info(
+                    f"[Pruning] Current accuracy {current_avg_accuracy:.2f} < best accuracy {study.best_value:.2f}"
                 )
                 raise optuna.TrialPruned()
 
@@ -335,7 +342,7 @@ def run_optuna_optimization(
         
         study.optimize(
             lambda trial: objective(
-                trial, base_args, study_name, pruning_thresholds, data_manager
+                study, trial, base_args, study_name, pruning_thresholds, data_manager
             ),
             n_trials=n_trials,
             callbacks=callbacks,

@@ -65,29 +65,37 @@ def main():
             additional_args.extend(['--max_time_hours', str(args.max_time_hours)])
     if args.reset:
         additional_args.append('--reset')
-    
-    CONFIGS = [
-        # "exps/slca.json",
-        # "exps/slca_inr.json",
-        # "exps/slca_ina.json",
-        # "exps/slca_cub.json",
-        # "exps/slca_omni.json",
-        # "exps/slca_vtab.json",
-        # "exps/mos.json",
-        # "exps/mos_inr.json",
-        # "exps/mos_ina.json",
-        # "exps/mos_cub.json",
-        # "exps/mos_omni.json",
-        # "exps/mos_vtab.json",
-        "exps/ease.json",
-        "exps/ease_inr.json",
-        "exps/ease_ina.json",
-        "exps/ease_cub.json",
-        "exps/ease_omni.json",
-        "exps/ease_vtab.json",
+
+    METHODS = [
+        "aper_aperpter",
+        "aper_finetune",
+        "aper_ssf",
+        "aper_vpt_deep",
+        "aper_vpt_shallow",
+        "l2p",
+        "coda_prompt",
+        "dualprompt",
+        # "slca",
+        # "mos",
+        # "ease"
+    ]
+    DATASETS = [
+        "inr",
+        "ina",
+        "cub",
+        "omni",
+        "vtab"
     ]
 
     try:
+        CONFIGS = []
+        for method in METHODS:
+            for dataset in DATASETS:
+                config_file = f"exps/{method}_{dataset}.json"
+                if not os.path.exists(config_file):
+                    print(f"Warning: Config file does not exist and will be skipped: {config_file}")
+                    continue
+                CONFIGS.append(config_file)
         for i, config_file in enumerate(CONFIGS, 1):
             print(f"\n\nProgress: {i}/{len(CONFIGS)}")
             run_experiment(config_file, additional_args)
