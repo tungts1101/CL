@@ -80,6 +80,7 @@ def main():
         # "ease"
     ]
     DATASETS = [
+        "cifar",
         "inr",
         "ina",
         "cub",
@@ -91,7 +92,7 @@ def main():
         CONFIGS = []
         for method in METHODS:
             for dataset in DATASETS:
-                config_file = f"exps/{method}_{dataset}.json"
+                config_file = f"exps/{method}_{dataset}.json" if dataset != "cifar" else f"exps/{method}.json"
                 if not os.path.exists(config_file):
                     print(f"Warning: Config file does not exist and will be skipped: {config_file}")
                     continue
