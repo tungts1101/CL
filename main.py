@@ -20,6 +20,10 @@ def main():
     set_data_root_path(data_root)
     os.makedirs(get_data_root_path(), exist_ok=True)
 
+    if merged["model_name"] == "mos":
+        merged["max_iter"] = 1
+        merged["ensemble"] = False
+
     if merged['optuna']:
         pruning_thresholds = load_thresholds_config(
             merged.get('model_name'), 

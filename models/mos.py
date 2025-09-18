@@ -402,7 +402,7 @@ class Learner(BaseLearner):
                 # self-refined
                 final_logits = []
                 
-                MAX_ITER = 4
+                MAX_ITER = self.args.get("max_iter", 4)
                 for x_id in range(len(inputs)):
                     loop_num = 0
                     prev_adapter_idx = orig_idx[x_id]
