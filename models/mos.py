@@ -134,8 +134,7 @@ class Learner(BaseLearner):
             if self._cur_task > 0:
                 self.classifer_align(self._network.backbone)
         else:
-            pass
-            # self.classifier_alignment(self.data_manager)
+            self.classifier_alignment(self.data_manager)
 
     def get_optimizer(self, model):
         base_params = [p for name, p in model.named_parameters() if 'adapter' in name and p.requires_grad]
