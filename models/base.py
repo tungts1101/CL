@@ -482,13 +482,23 @@ class BaseLearner(object):
             self._ca_class_means = torch.zeros((total_class, feature_dim))
             self._ca_class_covs = torch.zeros((total_class, feature_dim, feature_dim))
         else:
+            old_shape = self._ca_class_means.shape
+            if feature_dim != old_shape[1]:
+                ca_class_means = torch.zeros((old_shape[0], feature_dim))
+                ca_class_means[:, :old_shape[1]] = self._ca_class_means
+                ca_class_means[:, old_shape[1]:] = 1e-4
+                self._ca_class_means = ca_class_means
+                ca_class_covs = torch.zeros((old_shape[0], feature_dim, feature_dim))
+                ca_class_covs[:, :old_shape[1], :old_shape[1]] = self._ca_class_covs
+                ca_class_covs[:, old_shape[1]:, old_shape[1]:] = torch.eye(feature_dim - old_shape[1]) * 1e-4
+                self._ca_class_covs = ca_class_covs
+
             new_ca_class_means = torch.zeros((total_class, feature_dim))
             new_ca_class_means[: self._known_classes] = self._ca_class_means
             self._ca_class_means = new_ca_class_means
             new_ca_class_covs = torch.zeros((total_class, feature_dim, feature_dim))
             new_ca_class_covs[: self._known_classes] = self._ca_class_covs
             self._ca_class_covs = new_ca_class_covs
-
         for cls_idx in range(self._known_classes, self._total_classes):
             data, targets, idx_dataset = data_manager.get_dataset(np.arange(cls_idx, cls_idx+1), source='train',
                                                                   mode='test', ret_data=True)
@@ -502,7 +512,7 @@ class BaseLearner(object):
                 elif isinstance(self._network, SLCANet):
                     _vectors = self._network(_inputs.to(self._device), bcb_no_grad=True, fc_only=False)["features"]
                 elif isinstance(self._network, EaseNet):
-                    _vectors = self._network.backbone.forward_proto(_inputs.to(self._device), adapt_index=self._cur_task)
+                    _vectors = self._network.backbone.forward(_inputs.to(self._device), True, use_init_ptm=self.use_init_ptm)
                 elif isinstance(self._network, SimpleVitNet):
                     _vectors = self._network(_inputs.to(self._device))["features"]
                 _vectors = _vectors.detach().cpu().numpy()

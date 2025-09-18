@@ -11,6 +11,7 @@ from utils.inc_net import EaseNet
 from models.base import BaseLearner
 from utils.toolkit import tensor2numpy
 import copy
+from backbone.linears import EaseCosineLinear
 
 num_workers = 8
 
@@ -261,7 +262,14 @@ class Learner(BaseLearner):
             if not self.args.get("use_ori", False) and self._cur_task > 0:
                 logging.info("Load backbone only")
                 self._network.fc.load_state_dict(fc_state)
-                del fc_state
+                
+                # fc = EaseCosineLinear(self._network.out_dim, self._total_classes)
+                # old_nb_classes = self._network.fc.out_features
+                # weight = copy.deepcopy(self._network.fc.weight.data)
+                # fc.sigma.data = self._network.fc.sigma.data
+                # fc.weight.data[ : old_nb_classes,] = nn.Parameter(weight[:, :-self._network.out_dim])
+                # del self._network.fc
+                # self._network.fc = fc
         else:
             self._train(self.train_loader, self.test_loader)
             if len(self._multiple_gpus) > 1:
