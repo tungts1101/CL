@@ -478,8 +478,6 @@ class BaseLearner(object):
         )
         total_class = self._total_classes
         feature_dim = self._network.feature_dim if not self.args.get("use_RP", False) else self.args["M"]
-        if isinstance(self._network, EaseNet):
-            feature_dim = self._network.backbone.out_dim
         if not hasattr(self, "_ca_class_means") or not hasattr(self, "_ca_class_covs"):
             self._ca_class_means = torch.zeros((total_class, feature_dim))
             self._ca_class_covs = torch.zeros((total_class, feature_dim, feature_dim))
@@ -504,7 +502,7 @@ class BaseLearner(object):
                 elif isinstance(self._network, SLCANet):
                     _vectors = self._network(_inputs.to(self._device), bcb_no_grad=True, fc_only=False)["features"]
                 elif isinstance(self._network, EaseNet):
-                    _vectors = self._network(_inputs.to(self._device))["features"]
+                    _vectors = self._network.backbone.forward_proto(_inputs.to(self._device), adapt_index=self._cur_task)
                 elif isinstance(self._network, SimpleVitNet):
                     _vectors = self._network(_inputs.to(self._device))["features"]
                 _vectors = _vectors.detach().cpu().numpy()
