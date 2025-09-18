@@ -11,6 +11,7 @@ from models.base import BaseLearner
 from utils.toolkit import tensor2numpy, target2onehot
 from torch.distributions.multivariate_normal import MultivariateNormal
 import os
+import copy
 
 
 # tune the model at first session with vpt, and then conduct simple shot.
@@ -115,10 +116,12 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            if self.args.get("use_ori", False):
-                self._network.load_state_dict(saved["model_state_dict"])
-            else:
-                self._network.backbone.load_state_dict(saved["model_state_dict"]["backbone"])
+            fc_state = copy.deepcopy(self._network.fc.state_dict())
+            self._network.load_state_dict(saved["model_state_dict"])
+            if not self.args.get("use_ori", False) and self._cur_task > 0:
+                print("load backbone only")
+                self._network.fc.load_state_dict(fc_state)
+                del fc_state
         else:
             self._init_train(train_loader, test_loader, optimizer, scheduler)
             self.save_checkpoint(filename)
@@ -131,7 +134,8 @@ class Learner(BaseLearner):
             if self._cur_task > 0:
                 self.classifer_align(self._network.backbone)
         else:
-            self.classifier_alignment(self.data_manager)
+            pass
+            # self.classifier_alignment(self.data_manager)
 
     def get_optimizer(self, model):
         base_params = [p for name, p in model.named_parameters() if 'adapter' in name and p.requires_grad]

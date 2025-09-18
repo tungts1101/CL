@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from utils.inc_net import EaseNet
 from models.base import BaseLearner
 from utils.toolkit import tensor2numpy
+import copy
 
 num_workers = 8
 
@@ -252,10 +253,14 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            if self.args.get("use_ori", False):
-                self._network.load_state_dict(saved["model_state_dict"])
-            else:
-                self._network.backbone.load_state_dict(saved["model_state_dict"]["backbone"])
+            
+            fc_state = copy.deepcopy(self._network.fc.state_dict())
+            self._network.load_state_dict(saved["model_state_dict"])
+
+            if not self.args.get("use_ori", False) and self._cur_task > 0:
+                logging.info("Load backbone only")
+                self._network.fc.load_state_dict(fc_state)
+                del fc_state
         else:
             self._train(self.train_loader, self.test_loader)
             if len(self._multiple_gpus) > 1:
