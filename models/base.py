@@ -610,7 +610,7 @@ class BaseLearner(object):
                     outputs = self._network(x, bcb_no_grad=True, fc_only=True)
                     logits = outputs['logits']
                 elif isinstance(self._network, EaseNet):
-                    outputs = self._network(x)
+                    outputs = self._network(x, test=True)
                     logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
                     outputs = self._network.fc(x)
