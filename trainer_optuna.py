@@ -178,10 +178,15 @@ def _train_optuna(args, study, trial, pruning_thresholds=None, data_manager=None
                 )
                 raise optuna.TrialPruned()
         
-        if study is not None and study.best_value is not None:
-            if current_avg_accuracy < study.best_value:
+        try:
+            best_value = study.best_value
+        except ValueError:
+            best_value = None
+
+        if best_value is not None:
+            if current_avg_accuracy < best_value:
                 logging.info(
-                    f"[Pruning] Current accuracy {current_avg_accuracy:.2f} < best accuracy {study.best_value:.2f}"
+                    f"[Pruning] Current accuracy {current_avg_accuracy:.2f} < best accuracy {best_value:.2f}"
                 )
                 raise optuna.TrialPruned()
 
