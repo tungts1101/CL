@@ -126,10 +126,11 @@ class Learner(BaseLearner):
         if self.use_diagonal or self.use_exemplars:
             return
         
-        if self.recalc_sim:
-            self.solve_sim_reset()
-        else:
-            self.solve_similarity()
+        if not self.args.get("use_ori", False):
+            if self.recalc_sim:
+                self.solve_sim_reset()
+            else:
+                self.solve_similarity()
     
     def get_A_B_Ahat(self, task_id):
         if self.use_init_ptm:

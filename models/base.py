@@ -478,6 +478,8 @@ class BaseLearner(object):
         )
         total_class = self._total_classes
         feature_dim = self._network.feature_dim if not self.args.get("use_RP", False) else self.args["M"]
+        if isinstance(self._network, EaseNet):
+            feature_dim = self._network.backbone.out_dim
         if not hasattr(self, "_ca_class_means") or not hasattr(self, "_ca_class_covs"):
             self._ca_class_means = torch.zeros((total_class, feature_dim))
             self._ca_class_covs = torch.zeros((total_class, feature_dim, feature_dim))
