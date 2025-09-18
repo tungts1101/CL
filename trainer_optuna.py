@@ -22,14 +22,14 @@ def suggest_hyperparameters(trial):
     ca_lr = trial.suggest_float("train_ca_lr", 1e-4, 1e-2)
 
     # robust_weight_log = trial.suggest_categorical("robust_weight_log", [-4, -3, -2, -1, 0, 1, 2, 3, 4])
-    robust_weight_log = trial.suggest_float("robust_weight_log", -2, 0)
+    robust_weight_log = trial.suggest_float("robust_weight_log", -3, 3)
     robust_weight = 10**robust_weight_log
 
     # entropy_weight_log = trial.suggest_categorical("entropy_weight_log", [-2, -1, 0, 1, 2])
-    entropy_weight_log = trial.suggest_float("entropy_weight_log", -2, 0)
+    entropy_weight_log = trial.suggest_float("entropy_weight_log", -3, 3)
     entropy_weight = 10**entropy_weight_log
 
-    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 0.5)
+    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 1.0)
 
     ca_lr = round(ca_lr, 5)
     robust_weight = round(robust_weight, 5)
@@ -178,17 +178,19 @@ def _train_optuna(args, study, trial, pruning_thresholds=None, data_manager=None
                 )
                 raise optuna.TrialPruned()
         
-        try:
-            best_value = study.best_value
-        except ValueError:
-            best_value = None
+        if task < data_manager.nb_tasks - 1:
+            try:
+                best_value = study.best_value
+            except ValueError:
+                best_value = None
 
-        if best_value is not None:
-            if current_avg_accuracy < best_value:
-                logging.info(
-                    f"[Pruning] Current accuracy {current_avg_accuracy:.2f} < best accuracy {best_value:.2f}"
-                )
-                raise optuna.TrialPruned()
+            if best_value is not None:
+                if current_avg_accuracy < best_value:
+                    logging.info(
+
+                        f"[Pruning] Current accuracy {current_avg_accuracy:.2f} < best accuracy {best_value:.2f}"
+                    )
+                    raise optuna.TrialPruned()
 
     final_avg_accuracy = sum(cnn_curve["top1"]) / len(cnn_curve["top1"])
 
