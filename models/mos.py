@@ -115,7 +115,10 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            self._network.load_state_dict(saved["model_state_dict"])
+            if self.args.get("use_ori", False):
+                self._network.load_state_dict(saved["model_state_dict"])
+            else:
+                self._network.backbone.load_state_dict(saved["model_state_dict"]["backbone"])
         else:
             self._init_train(train_loader, test_loader, optimizer, scheduler)
             self.save_checkpoint(filename)

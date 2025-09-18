@@ -67,25 +67,26 @@ def main():
         additional_args.append('--reset')
 
     METHODS = [
-        "aper_aperpter",
-        "aper_finetune",
-        "aper_ssf",
-        "aper_vpt_deep",
-        "aper_vpt_shallow",
-        "l2p",
-        "coda_prompt",
-        "dualprompt",
-        # "slca",
-        # "mos",
-        # "ease"
+        # "aper_aperpter",
+        # "aper_finetune",
+        # "aper_ssf",
+        # "aper_vpt_deep",
+        # "aper_vpt_shallow",
+        # "l2p",
+        # "coda_prompt",
+        # "dualprompt",
+        "slca",
+        "mos",
+        "ease"
     ]
     DATASETS = [
-        "cifar",
-        "inr",
-        "ina",
-        "cub",
-        "omni",
-        "vtab"
+        # "cifar",
+        # "inr",
+        # "ina",
+        # "cub",
+        # "omni",
+        # "vtab",
+        "cars"
     ]
 
     try:

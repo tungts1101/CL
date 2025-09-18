@@ -52,8 +52,9 @@ class Learner(BaseLearner):
     def after_task(self):
         self._known_classes = self._total_classes
         logging.info('Exemplar size: {}'.format(self.exemplar_size))
-        # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}'.format(self.seed), head_only=self.fix_bcb)
-        self._network.fc.recall()
+        if self.args.get("use_ori", False):
+            # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}'.format(self.seed), head_only=self.fix_bcb)
+            self._network.fc.recall()
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -83,7 +84,10 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            self._network.load_state_dict(saved["model_state_dict"])
+            if self.args.get("use_ori", False):
+                self._network.load_state_dict(saved["model_state_dict"])
+            else:
+                self._network.backbone.load_state_dict(saved["model_state_dict"]["backbone"])
         else:
             self._stage1_training(self.train_loader, self.test_loader)
             self.save_checkpoint(filename)
@@ -94,9 +98,10 @@ class Learner(BaseLearner):
             self._network = self._network.module
 
         # CA
-        self._network.fc.backup()
-        # if self.save_before_ca:
-            # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}_before_ca'.format(self.seed), head_only=self.fix_bcb)
+        if self.args.get("use_ori", False):
+            self._network.fc.backup()
+            # if self.save_before_ca:
+                # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}_before_ca'.format(self.seed), head_only=self.fix_bcb)
         
         if self.args.get("use_ori", False):
             self._compute_class_mean(data_manager)
