@@ -116,12 +116,14 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            fc_state = copy.deepcopy(self._network.fc.state_dict())
-            self._network.load_state_dict(saved["model_state_dict"])
             if not self.args.get("use_ori", False) and self._cur_task > 0:
                 print("load backbone only")
-                self._network.fc.load_state_dict(fc_state)
-                del fc_state
+                # Filter only backbone parameters from saved state dict
+                backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
+                                if k.startswith("backbone.")}
+                self._network.load_state_dict(backbone_state, strict=False)
+            else:
+                self._network.load_state_dict(saved["model_state_dict"])
         else:
             self._init_train(train_loader, test_loader, optimizer, scheduler)
             self.save_checkpoint(filename)
