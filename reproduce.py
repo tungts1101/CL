@@ -75,17 +75,17 @@ def main():
         # "l2p",
         # "coda_prompt",
         # "dualprompt",
-        "slca",
+        # "slca",
         "mos",
-        "ease"
+        # "ease"
     ]
     DATASETS = [
-        # "cifar",
-        # "inr",
-        # "ina",
-        # "cub",
-        # "omni",
-        # "vtab",
+        "cifar",
+        "inr",
+        "ina",
+        "cub",
+        "omni",
+        "vtab",
         "cars"
     ]
 
