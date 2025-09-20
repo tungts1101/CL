@@ -14,10 +14,18 @@ def train(args):
     seed_list = copy.deepcopy(args["seed"])
     device = copy.deepcopy(args["device"])
 
+    # Store results from all seeds
+    all_seed_results = []
+    
     for seed in seed_list:
         args["seed"] = seed
         args["device"] = device
-        _train(args)
+        seed_results = _train(args)
+        all_seed_results.append(seed_results)
+    
+    # Calculate mean and std across seeds
+    if len(all_seed_results) > 1:
+        _calculate_seed_statistics(args, all_seed_results)
 
 
 def _train(args):
@@ -128,6 +136,18 @@ def _train(args):
     acc_history = [float(np.round(v, 2)) for v in acc_history]
     logging.info(f"Final accuracy history: {acc_history}")
 
+    # Prepare results to return
+    results = {
+        'seed': args['seed'],
+        'acc_history': acc_history,
+        'cnn_curve': cnn_curve,
+        'nme_curve': nme_curve if nme_curve["top1"] else None,
+        'cnn_matrix': cnn_matrix,
+        'nme_matrix': nme_matrix if nme_matrix else None,
+        'final_avg_acc_cnn': sum(cnn_curve["top1"])/len(cnn_curve["top1"]) if cnn_curve["top1"] else 0,
+        'final_avg_acc_nme': sum(nme_curve["top1"])/len(nme_curve["top1"]) if nme_curve["top1"] else None
+    }
+
     if 'print_forget' in args.keys() and args['print_forget'] is True:
         if len(cnn_matrix) > 0:
             np_acctable = np.zeros([task + 1, task + 1])
@@ -149,6 +169,105 @@ def _train(args):
             print('Accuracy Matrix (NME):')
             print(np_acctable)
         logging.info('Forgetting (NME): {}'.format(forgetting))
+    
+    return results
+
+
+def _calculate_seed_statistics(args, all_seed_results):
+    """Calculate mean and standard deviation across multiple seeds"""
+    
+    # Remove existing handlers to avoid multiple console printing
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Setup logging for statistics with single handler
+    init_cls = 0 if args["init_cls"] == args["increment"] else args["init_cls"]
+    logs_name = "logs/{}/{}/{}/{}".format(args["model_name"], args["dataset"], init_cls, args['increment'])
+    
+    if not os.path.exists(logs_name):
+        os.makedirs(logs_name)
+
+    logfilename = "logs/{}/{}/{}/{}/{}_STATS_{}".format(
+        args["model_name"],
+        args["dataset"], 
+        init_cls,
+        args["increment"],
+        args["prefix"],
+        args["backbone_type"]
+    )
+    
+    # Configure root logger with file and console handlers
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(filename)s] => %(message)s",
+        handlers=[
+            logging.FileHandler(filename=logfilename + ".log"),
+            logging.StreamHandler(sys.stdout),
+        ],
+        force=True  # Force reconfiguration
+    )
+
+    seeds = [result['seed'] for result in all_seed_results]
+    logging.info(f"=== SEED STATISTICS ACROSS {len(seeds)} SEEDS: {seeds} ===")
+    
+    # Calculate CNN statistics
+    cnn_final_accs = [result['final_avg_acc_cnn'] for result in all_seed_results]
+    cnn_mean = np.mean(cnn_final_accs)
+    cnn_std = np.std(cnn_final_accs, ddof=1) if len(cnn_final_accs) > 1 else 0.0
+    
+    logging.info(f"CNN Final Average Accuracies: {[round(acc, 2) for acc in cnn_final_accs]}")
+    logging.info(f"CNN Mean ± Std: {cnn_mean:.2f} ± {cnn_std:.2f}")
+    
+    # Calculate NME statistics if available
+    nme_final_accs = [result['final_avg_acc_nme'] for result in all_seed_results if result['final_avg_acc_nme'] is not None]
+    if nme_final_accs:
+        nme_mean = np.mean(nme_final_accs)
+        nme_std = np.std(nme_final_accs, ddof=1) if len(nme_final_accs) > 1 else 0.0
+        logging.info(f"NME Final Average Accuracies: {[round(acc, 2) for acc in nme_final_accs]}")
+        logging.info(f"NME Mean ± Std: {nme_mean:.2f} ± {nme_std:.2f}")
+    
+    # Calculate task-wise statistics
+    max_tasks = max(len(result['acc_history']) for result in all_seed_results)
+    task_stats = []
+    
+    for task_idx in range(max_tasks):
+        task_accs = []
+        for result in all_seed_results:
+            if task_idx < len(result['acc_history']):
+                task_accs.append(result['acc_history'][task_idx])
+        
+        if task_accs:
+            task_mean = np.mean(task_accs)
+            task_std = np.std(task_accs, ddof=1) if len(task_accs) > 1 else 0.0
+            task_stats.append((task_mean, task_std))
+            logging.info(f"Task {task_idx + 1} Accuracy: {task_mean:.2f} ± {task_std:.2f}")
+    
+    # Calculate per-task curve statistics for CNN
+    if all_seed_results[0]['cnn_curve']['top1']:
+        max_curve_len = max(len(result['cnn_curve']['top1']) for result in all_seed_results)
+        
+        logging.info("CNN TOP1 CURVE STATISTICS:")
+        for task_idx in range(max_curve_len):
+            task_top1_accs = []
+            for result in all_seed_results:
+                if task_idx < len(result['cnn_curve']['top1']):
+                    task_top1_accs.append(result['cnn_curve']['top1'][task_idx])
+            
+            if task_top1_accs:
+                task_mean = np.mean(task_top1_accs)
+                task_std = np.std(task_top1_accs, ddof=1) if len(task_top1_accs) > 1 else 0.0
+                logging.info(f"Task {task_idx + 1} Top1: {task_mean:.2f} ± {task_std:.2f}")
+    
+    # Log final summary
+    logging.info("=" * 60)
+    logging.info(f"FINAL RESULTS SUMMARY ({args['model_name']} on {args['dataset']})")
+    logging.info("=" * 60)
+    logging.info(f"Seeds: {seeds}")
+    logging.info(f"CNN Final Accuracy: {cnn_mean:.2f} ± {cnn_std:.2f}")
+    if nme_final_accs:
+        logging.info(f"NME Final Accuracy: {nme_mean:.2f} ± {nme_std:.2f}")
+    logging.info("=" * 60)
 
 
 def _set_device(args):

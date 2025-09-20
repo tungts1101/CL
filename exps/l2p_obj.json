@@ -11,7 +11,7 @@
     "backbone_type": "vit_base_patch16_224_l2p",
     "get_original_backbone": true,
     "device": ["0"],
-    "seed": [1993],
+    "seed": [1993, 1994, 1995],
     
     "tuned_epoch": 5,
     "init_lr": 0.001875,

@@ -11,7 +11,7 @@
     "model_postfix": "50e",
     "backbone_type": "vit_base_patch16_224",
     "device": ["0"],
-    "seed": [1993],
+    "seed": [1993, 1994, 1995],
     "lrate": 0.01,
     "weight_decay": 5e-4,
     "lrate_decay": 0.1,
