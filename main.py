@@ -20,8 +20,8 @@ def main():
     set_data_root_path(data_root)
     os.makedirs(get_data_root_path(), exist_ok=True)
 
-    if args.override_seed != -1:
-        merged['seed'] = args.override_seed
+    if merged['override_seed'] != -1:
+        merged['seed'] = [merged['override_seed']]
 
     if merged["model_name"] == "mos":
         merged["max_iter"] = 1
