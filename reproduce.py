@@ -49,6 +49,8 @@ def main():
                         help='Reset training and start from scratch')
     parser.add_argument('--no_alignment', action=argparse.BooleanOptionalAction, default=False,
                         help='Disable classifier alignment.')
+    parser.add_argument('--lca', action=argparse.BooleanOptionalAction, default=False,
+                        help='Use LCA for feature augmentation.')
     
     args = parser.parse_args()
     
@@ -69,6 +71,8 @@ def main():
         additional_args.append('--reset')
     if args.no_alignment:
         additional_args.append('--no_alignment')
+    if args.lca:
+        additional_args.append('--lca')
 
     METHODS = [
         # "aper_aperpter",
