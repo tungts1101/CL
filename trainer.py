@@ -42,7 +42,6 @@ def _train(args):
         init_cls,
         args["increment"],
         args["prefix"],
-        args["seed"],
         args["backbone_type"],
     )
     logging.basicConfig(
