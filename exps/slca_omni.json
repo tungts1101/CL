@@ -26,8 +26,8 @@
     "crct_epochs": 10,
     "ca_sample_per_cls": 512,
     "ca_batch_size": 128,
-    "ca_lr": 0.0005,
-    "ca_robust_weight": 0.5,
-    "ca_entropy_weight": 0.2,
-    "ca_logit_norm": 0.0
+    "ca_lr": 0.01,
+    "ca_robust_weight": 0.1,
+    "ca_entropy_weight": 0.1,
+    "ca_logit_norm": 0.1
 }
