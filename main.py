@@ -39,6 +39,8 @@ def main():
         else:
             merged['prefix'] = 'base'
             merged['use_ori'] = True
+            if merged['no_alignment']:
+                merged['prefix'] += '_noalign'
         train(merged)
 
 def load_json(setting_path):
