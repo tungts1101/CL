@@ -108,12 +108,13 @@ class Learner(BaseLearner):
             # if self.save_before_ca:
                 # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}_before_ca'.format(self.seed), head_only=self.fix_bcb)
         
-        if self.args.get("use_ori", False):
-            self._compute_class_mean(data_manager)
-            if self._cur_task > 0 and self.ca_epochs > 0:
-                self._stage2_compact_classifier(task_size, data_manager)
-        else:
-            self.classifier_alignment(data_manager)
+        if not self.args["no_alignment"]:
+            if self.args.get("use_ori", False):
+                self._compute_class_mean(data_manager)
+                if self._cur_task > 0 and self.ca_epochs > 0:
+                    self._stage2_compact_classifier(task_size, data_manager)
+            else:
+                self.classifier_alignment(data_manager)
         
 
     def _run(self, train_loader, test_loader, optimizer, scheduler):

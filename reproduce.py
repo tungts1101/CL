@@ -47,6 +47,8 @@ def main():
                         help='Max time in hours for Optuna (only used with --optuna)')
     parser.add_argument('--reset', action='store_true', default=False,
                         help='Reset training and start from scratch')
+    parser.add_argument('--no_alignment', action=argparse.BooleanOptionalAction, default=False,
+                        help='Disable classifier alignment.')
     
     args = parser.parse_args()
     
@@ -65,6 +67,8 @@ def main():
             additional_args.extend(['--max_time_hours', str(args.max_time_hours)])
     if args.reset:
         additional_args.append('--reset')
+    if args.no_alignment:
+        additional_args.append('--no_alignment')
 
     METHODS = [
         # "aper_aperpter",

@@ -92,6 +92,8 @@ def setup_parser():
                         help="Stop after N trials without improvement")
     parser.add_argument("--max_time_hours", type=float, default=None,
                         help="Stop after N hours")
+    parser.add_argument('--no_alignment', action=argparse.BooleanOptionalAction, default=False,
+                        help='Disable classifier alignment.')
     return parser
 
 if __name__ == '__main__':

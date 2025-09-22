@@ -103,6 +103,8 @@ class BaseLearner(object):
             self.args["model_name"],
             "lca",
         ]
+        if self.args["no_alignment"]:
+            prefix_parts.append("no")
         return "_".join(prefix_parts)
 
     def checkpoint_path(self, task):
