@@ -20,6 +20,9 @@ def main():
     set_data_root_path(data_root)
     os.makedirs(get_data_root_path(), exist_ok=True)
 
+    if args.override_seed != -1:
+        merged['seed'] = args.override_seed
+
     if merged["model_name"] == "mos":
         merged["max_iter"] = 1
         merged["ensemble"] = False
@@ -96,6 +99,8 @@ def setup_parser():
                         help="Stop after N hours")
     parser.add_argument('--no_alignment', action=argparse.BooleanOptionalAction, default=False,
                         help='Disable classifier alignment.')
+    parser.add_argument('--override_seed', type=int, default=-1,
+                        help='Random seed for reproducibility.')
     return parser
 
 if __name__ == '__main__':

@@ -51,6 +51,8 @@ def main():
                         help='Disable classifier alignment.')
     parser.add_argument('--lca', action=argparse.BooleanOptionalAction, default=False,
                         help='Use LCA for feature augmentation.')
+    parser.add_argument('--override_seed', type=int, default=-1,
+                        help='Random seed for reproducibility.')
     
     args = parser.parse_args()
     
@@ -73,6 +75,8 @@ def main():
         additional_args.append('--no_alignment')
     if args.lca:
         additional_args.append('--lca')
+    if args.override_seed != -1:
+        additional_args.extend(['--override_seed', str(args.override_seed)])
 
     METHODS = [
         # "aper_aperpter",
@@ -80,11 +84,11 @@ def main():
         # "aper_ssf",
         # "aper_vpt_deep",
         # "aper_vpt_shallow",
-        "l2p",
+        # "l2p",
         # "coda_prompt",
         # "dualprompt",
         # "slca",
-        # "mos",
+        "mos",
         # "ease"
     ]
     DATASETS = [
@@ -92,9 +96,9 @@ def main():
         # "inr",
         # "ina",
         # "cub",
-        "omni",
-        "vtab",
-        "cars"
+        # "omni",
+        # "vtab",
+        # "cars"
     ]
 
     try:
