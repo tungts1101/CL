@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from utils.toolkit import tensor2numpy, accuracy
 from scipy.spatial.distance import cdist
 import os
-from utils.inc_net import SimpleVitNet, EaseNet, SLCANet, MOSNet
+from utils.inc_net import SimpleVitNet, EaseNet, SLCANet, MOSNet, CodaPromptVitNet, PromptVitNet
 
 
 EPSILON = 1e-8
@@ -517,6 +517,8 @@ class BaseLearner(object):
                     _vectors = self._network.backbone.forward(_inputs.to(self._device), True, use_init_ptm=self.use_init_ptm)
                 elif isinstance(self._network, SimpleVitNet):
                     _vectors = self._network(_inputs.to(self._device))["features"]
+                elif isinstance(self._network, CodaPromptVitNet):
+                    _vectors = self._network.get_features(_inputs.to(self._device))
                 _vectors = _vectors.detach().cpu().numpy()
                 vectors.append(_vectors)
 
@@ -623,6 +625,9 @@ class BaseLearner(object):
                     outputs = self._network.fc(x)
                     logits = outputs['logits']
                 elif isinstance(self._network, SimpleVitNet):
+                    outputs = self._network.fc(x)
+                    logits = outputs['logits']
+                elif isinstance(self._network, CodaPromptVitNet):
                     outputs = self._network.fc(x)
                     logits = outputs['logits']
 

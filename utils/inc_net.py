@@ -686,6 +686,19 @@ class CodaPromptVitNet(nn.Module):
         self.fc = nn.Linear(768, args["nb_classes"])
         self.prompt = CodaPrompt(768, args["nb_tasks"], args["prompt_param"])
 
+    def get_features(self, x, train=False):
+        if self.prompt is not None:
+            with torch.no_grad():
+                q, _ = self.backbone(x)
+                q = q[:,0,:]
+            out, _ = self.backbone(x, prompt=self.prompt, q=q, train=train)
+            out = out[:,0,:]
+        else:
+            out, _ = self.backbone(x)
+            out = out[:,0,:]
+        out = out.view(out.size(0), -1)
+        return out
+
     # pen: get penultimate features  
     def forward(self, x, pen=False, train=False):
         if self.prompt is not None:
