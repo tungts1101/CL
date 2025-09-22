@@ -54,7 +54,7 @@ class Learner(BaseLearner):
         train_dataset = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes),source="train", mode="train")
         self.train_dataset = train_dataset
         self.data_manager = data_manager
-        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=num_workers)
+        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=False, num_workers=num_workers)
         test_dataset = data_manager.get_dataset(np.arange(0, self._total_classes), source="test", mode="test" )
         self.test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False, num_workers=num_workers)
 
@@ -108,7 +108,13 @@ class Learner(BaseLearner):
             self._network.train()
 
             losses = 0.0
-            correct, total = 0, 0
+            correct, total = 0.0, 0
+            
+            # Debug: Check if train_loader is empty
+            if len(train_loader) == 0:
+                logging.warning(f"Train loader is empty for task {self._cur_task}")
+                continue
+                
             for i, (_, inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
             
@@ -129,13 +135,13 @@ class Learner(BaseLearner):
                 losses += loss.item()
 
                 _, preds = torch.max(logits, dim=1)
-                correct += preds.eq(targets.expand_as(preds)).cpu().sum()
+                correct += preds.eq(targets.expand_as(preds)).cpu().sum().item()
                 total += len(targets)
 
             if scheduler:
                 scheduler.step()
             
-            train_acc = np.around(tensor2numpy(correct) * 100 / total, decimals=2)
+            train_acc = np.around(correct * 100 / total, decimals=2) if total > 0 else 0.0
 
             if (epoch + 1) % 5 == 0:
                 test_acc = self._compute_accuracy(self._network, test_loader)
