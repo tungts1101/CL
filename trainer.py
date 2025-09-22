@@ -194,6 +194,7 @@ def _calculate_seed_statistics(args, all_seed_results):
     # Create a separate logger for statistics
     stats_logger = logging.getLogger('statistics')
     stats_logger.setLevel(logging.INFO)
+    stats_logger.propagate = False  # Prevent propagation to root logger
     
     # Remove any existing handlers for this logger
     for handler in stats_logger.handlers[:]:
