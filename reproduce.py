@@ -72,18 +72,18 @@ def main():
         # "aper_ssf",
         # "aper_vpt_deep",
         # "aper_vpt_shallow",
-        # "l2p",
+        "l2p",
         # "coda_prompt",
         # "dualprompt",
         # "slca",
-        "mos",
+        # "mos",
         # "ease"
     ]
     DATASETS = [
-        "cifar",
-        "inr",
-        "ina",
-        "cub",
+        # "cifar",
+        # "inr",
+        # "ina",
+        # "cub",
         "omni",
         "vtab",
         "cars"
