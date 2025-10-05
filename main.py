@@ -6,8 +6,10 @@ import yaml
 from trainer import train
 from trainer_optuna import train as train_optuna
 from utils.data import set_data_root_path, get_data_root_path, DEFAULT_DATA_ROOT_PATH
+import time
 
 def main():
+    start_time = time.time()
     args = setup_parser().parse_args()
     param = load_json(args.config)
     args = vars(args) # Converting argparse Namespace to a dict.
@@ -23,9 +25,9 @@ def main():
     if merged['override_seed'] != -1:
         merged['seed'] = [merged['override_seed']]
 
-    if merged["model_name"] == "mos":
-        merged["max_iter"] = 1
-        merged["ensemble"] = False
+    # if merged["model_name"] == "mos":
+    #     merged["max_iter"] = 4
+    #     merged["ensemble"] = False
 
     if merged['optuna']:
         pruning_thresholds = load_thresholds_config(
@@ -34,6 +36,9 @@ def main():
         )
         merged['use_ori'] = False
         merged['prefix'] = 'optuna_lca'
+        merged['lca'] = True
+        
+        print(f"Merged configuration: {merged}")
         train_optuna(merged, pruning_thresholds)
     else:
         if merged['lca']:
@@ -45,6 +50,10 @@ def main():
             if merged['no_alignment']:
                 merged['prefix'] += '_noalign'
         train(merged)
+    
+    end_time = time.time()
+    elapsed_time = (end_time - start_time) / 60  # in minutes
+    print(f"\n⏱️ Total execution time: {elapsed_time:.2f} minutes")
 
 def load_json(setting_path):
     with open(setting_path) as data_file:

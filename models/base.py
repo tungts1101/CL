@@ -101,8 +101,9 @@ class BaseLearner(object):
             self.args["dataset"],
             str(self.args["init_cls"]),
             self.args["model_name"],
-            "lca",
         ]
+        # if self.args["lca"]:
+        #     prefix_parts.append("lca")
         if self.args["no_alignment"]:
             prefix_parts.append("no")
         return "_".join(prefix_parts)
@@ -110,6 +111,18 @@ class BaseLearner(object):
     def checkpoint_path(self, task):
         filename = "{}_{}.pkl".format(self.prefix(), task)
         return os.path.join(CHECKPOINT_DIR, filename)
+
+    def robustness_path(self, lca=False):
+        prefix_parts = [
+            str(self.args["seed"]),
+            self.args["dataset"],
+            str(self.args["init_cls"]),
+            self.args["model_name"],
+        ]
+        if lca:
+            prefix_parts.append("lca")
+        prefix_parts.append("robustness")
+        return os.path.join(CHECKPOINT_DIR, "_".join(prefix_parts) + ".pkl")
 
     def save_checkpoint(self, filename, inc_save_dict=None):
         self._network.cpu()
@@ -127,12 +140,14 @@ class BaseLearner(object):
     def _evaluate(self, y_pred, y_true):
         ret = {}
         grouped = accuracy(y_pred.T[0], y_true, self._known_classes, self.args["init_cls"], self.args["increment"])
+        for key in grouped:
+            grouped[key] = float(np.round(grouped[key], 2))
         ret["grouped"] = grouped
         ret["top1"] = grouped["total"]
-        ret["top{}".format(self.topk)] = np.around(
+        ret["top{}".format(self.topk)] = float(np.around(
             (y_pred.T == np.tile(y_true, (self.topk, 1))).sum() * 100 / len(y_true),
             decimals=2,
-        )
+        ))
 
         return ret
 
@@ -562,7 +577,7 @@ class BaseLearner(object):
         optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=5e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ca_epochs)
 
-        robust_weight_base = self.args.get("ca_robust_weight", 0.0)
+        robust_weight = self.args.get("ca_robust_weight", 0.0)
         entropy_weight = self.args.get("ca_entropy_weight", 0.0)
         logit_norm = self.args.get("ca_logit_norm", 0.0)
 
@@ -572,37 +587,66 @@ class BaseLearner(object):
         num_sampled_pcls = self.args.get("ca_sample_per_cls", 256)
         batch_size = self.args.get("ca_batch_size", 64)
 
-        for class_idx in range(self._total_classes):
-            mean = self._ca_class_means[class_idx].to(self._device)
-            cov = self._ca_class_covs[class_idx].to(self._device)
+        # for class_idx in range(self._total_classes):
+        #     mean = self._ca_class_means[class_idx].to(self._device)
+        #     cov = self._ca_class_covs[class_idx].to(self._device)
 
-            # m = MultivariateNormal(mean.float(), cov.float())
-            # sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+        #     # m = MultivariateNormal(mean.float(), cov.float())
+        #     # sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
 
-            try:
-                m = MultivariateNormal(mean, covariance_matrix=cov)
-                sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
-            except Exception as e:
-                logging.warning(f"[Sampling] Invalid covariance at class {class_idx}, fallback to diag. Error: {e}")
-                diag_cov = torch.diag(torch.clamp(torch.diag(cov), min=1e-6))
-                m = MultivariateNormal(mean, covariance_matrix=diag_cov)
-                sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+        #     try:
+        #         m = MultivariateNormal(mean, covariance_matrix=cov)
+        #         sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+        #     except Exception as e:
+        #         logging.warning(f"[Sampling] Invalid covariance at class {class_idx}, fallback to diag. Error: {e}")
+        #         diag_cov = torch.diag(torch.clamp(torch.diag(cov), min=1e-6))
+        #         m = MultivariateNormal(mean, covariance_matrix=diag_cov)
+        #         sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
 
-            sampled_data_single = torch.nan_to_num(
-                sampled_data_single, nan=0.0, posinf=1e6, neginf=-1e6
-            )
+        #     sampled_data_single = torch.nan_to_num(
+        #         sampled_data_single, nan=0.0, posinf=1e6, neginf=-1e6
+        #     )
 
-            sampled_data.append(sampled_data_single)
-            sampled_label.extend([class_idx] * num_sampled_pcls)
+        #     sampled_data.append(sampled_data_single)
+        #     sampled_label.extend([class_idx] * num_sampled_pcls)
 
-        sampled_data = torch.cat(sampled_data, dim=0).float().to(self._device)
-        sampled_label = torch.tensor(sampled_label).long().to(self._device)
+        # sampled_data = torch.cat(sampled_data, dim=0).float().to(self._device)
+        # sampled_label = torch.tensor(sampled_label).long().to(self._device)
 
-        inputs = sampled_data
-        targets = sampled_label
+        # inputs = sampled_data
+        # targets = sampled_label
 
         prog_bar = tqdm(range(ca_epochs))
         for _ in prog_bar:
+            for class_idx in range(self._total_classes):
+                mean = self._ca_class_means[class_idx].to(self._device)
+                cov = self._ca_class_covs[class_idx].to(self._device)
+
+                # m = MultivariateNormal(mean.float(), cov.float())
+                # sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+
+                try:
+                    m = MultivariateNormal(mean, covariance_matrix=cov)
+                    sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+                except Exception as e:
+                    logging.warning(f"[Sampling] Invalid covariance at class {class_idx}, fallback to diag. Error: {e}")
+                    diag_cov = torch.diag(torch.clamp(torch.diag(cov), min=1e-6))
+                    m = MultivariateNormal(mean, covariance_matrix=diag_cov)
+                    sampled_data_single = m.sample(sample_shape=(num_sampled_pcls,))
+
+                sampled_data_single = torch.nan_to_num(
+                    sampled_data_single, nan=0.0, posinf=1e6, neginf=-1e6
+                )
+
+                sampled_data.append(sampled_data_single)
+                sampled_label.extend([class_idx] * num_sampled_pcls)
+
+            sampled_data = torch.cat(sampled_data, dim=0).float().to(self._device)
+            sampled_label = torch.tensor(sampled_label).long().to(self._device)
+
+            inputs = sampled_data
+            targets = sampled_label
+
             sf_indexes = torch.randperm(inputs.size(0))
             inputs = inputs[sf_indexes]
             targets = targets[sf_indexes]
@@ -611,9 +655,9 @@ class BaseLearner(object):
             total_ce_loss = total_rb_loss = total_entropy_loss = 0
             total_acc = 0
 
-            for i in range(0, len(sampled_data), batch_size):
-                x = sampled_data[i : i + batch_size]
-                y = sampled_label[i : i + batch_size]
+            for _iter in range(self._total_classes):
+                x = sampled_data[_iter * num_sampled_pcls:(_iter + 1) * num_sampled_pcls]
+                y = sampled_label[_iter * num_sampled_pcls:(_iter + 1) * num_sampled_pcls]
 
                 if isinstance(self._network, MOSNet):
                     outputs = self._network(x, fc_only=True)
@@ -631,135 +675,84 @@ class BaseLearner(object):
                     outputs = self._network.fc(x)
                     logits = outputs['logits']
 
-                if logit_norm != 0:
-                    batch_size = logits.size(0)
-                    num_tasks = self._cur_task + 1
-                    
-                    # Compute per-task norms for averaging
-                    task_norms = torch.zeros(batch_size, num_tasks, device=logits.device)
-                    
-                    for task in range(num_tasks):
-                        # Get class indices for this task
-                        cls_indices = [clz for clz in self._cls2task if self._cls2task[clz] == task]
-                        if cls_indices:
-                            task_logits = logits[:, cls_indices]  # (batch_size, num_classes_in_task)
-                            task_norms[:, task] = torch.norm(task_logits, p=2, dim=-1) + 1e-7
-                    
-                    # Average norms across all tasks
-                    avg_norms = task_norms.sum(dim=-1) / num_tasks  # Average across all tasks
-                    avg_norms = avg_norms.unsqueeze(-1)  # (batch_size, 1)
-                    
-                    # Apply normalization: logits / avg_norm / logit_norm_factor
-                    normalized_logits = logits / (avg_norms + 1e-7) / logit_norm
-                    loss_vec = F.cross_entropy(normalized_logits, y, reduction="none")
-                else:
-                    loss_vec = F.cross_entropy(logits, y, reduction="none")
+                loss_vec = F.cross_entropy(logits, y, reduction="none")
 
-                if robust_weight_base == 0 and entropy_weight == 0:
-                    loss = loss_vec.mean()
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+                L_total = torch.tensor(0.0, device=x.device)  # L = Σ Li
+                total_term1 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term1
+                total_term2 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term2
+                total_term3 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term3 (entropy)
                     
-                    bs = len(y)
-                    total_loss += loss.item() * bs
-                    total_ce_loss += loss.item() * bs
-                    total_rb_loss += 0
-                    total_entropy_loss += 0
-                    total_acc += (logits.argmax(dim=1) == y).sum().item()
-                    total += bs
-                else:
-                    L_total = torch.tensor(0.0, device=x.device)  # L = Σ Li
-                    total_term1 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term1
-                    total_term2 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term2
-                    total_term3 = torch.tensor(0.0, device=x.device)  # For logging: sum of all term3 (entropy)
+                unique_classes = torch.unique(y)
+                for class_i in unique_classes:
+                    label_mask = (y == class_i)
+                    class_losses = loss_vec[label_mask]
+                    term1 = class_losses.mean()
                     
-                    unique_classes = torch.unique(y)
-                    class_dist = torch.cdist(x, self._ca_class_means[:self._total_classes].to(self._device))
-                    class_indices = torch.argmin(class_dist, dim=1)
-                    for class_i in unique_classes:
-                        label_mask = (y == class_i)
-                        distance_mask = (class_indices == class_i)
-                        class_mask = distance_mask & label_mask
+                    # Second term: E_{x,x'~Ni}[|ℓ(yi, ht+1(x)) - ℓ(yi, ht+1(x'))|] where x,x' ∈ Ai
+                    if len(class_losses) >= 2:
+                        pairwise_diffs = torch.abs(
+                            class_losses.unsqueeze(1) - class_losses.unsqueeze(0)
+                        )
+                        # Remove diagonal (self-comparisons)
+                        mask = ~torch.eye(len(class_losses), dtype=torch.bool, device=x.device)
+                        pairwise_diffs = pairwise_diffs[mask]
+                        term2 = pairwise_diffs.mean()
+                    else:
+                        term2 = torch.tensor(0.0, device=x.device)
+                    
+                    # # Third term: Cluster entropy minimization
+                    # if len(class_losses) >= 1 and entropy_weight != 0:
+                    #     cluster_logits = logits[label_mask]  # Shape: (n_cluster_samples, n_classes)
+                    #     cluster_probs = F.softmax(cluster_logits, dim=1)  # Shape: (n_cluster_samples, n_classes)
                         
-                        # Get the samples that belong to this class
-                        class_samples = torch.where(class_mask)[0]
-                        
-                        # If no samples meet the conditions, fall back to label-only (term1 only)
-                        if len(class_samples) == 0:
-                            # Fall back to using only label condition for term1
-                            label_only_samples = torch.where(label_mask)[0]
-                            if len(label_only_samples) == 0:
-                                continue  # Skip if no samples with this label at all
-                            
-                            label_losses = loss_vec[label_mask]
-                            term1 = label_losses.mean()
-                            term2 = torch.tensor(0.0).cuda()
-                            term3 = torch.tensor(0.0).cuda()
-                        else:
-                            class_losses = loss_vec[class_mask]
-                            term1 = class_losses.mean()
-                            
-                            # Second term: E_{x,x'~Ni}[|ℓ(yi, ht+1(x)) - ℓ(yi, ht+1(x'))|] where x,x' ∈ Ai
-                            if len(class_samples) >= 2:
-                                pairwise_diffs = torch.abs(
-                                    class_losses.unsqueeze(1) - class_losses.unsqueeze(0)
-                                )
-                                # Remove diagonal (self-comparisons)
-                                mask = ~torch.eye(len(class_losses), dtype=torch.bool, device=x.device)
-                                pairwise_diffs = pairwise_diffs[mask]
-                                term2 = pairwise_diffs.mean()
-                            else:
-                                term2 = torch.tensor(0.0, device=x.device)
-                            
-                            # Third term: Cluster entropy minimization
-                            if len(class_samples) >= 1 and entropy_weight != 0:
-                                cluster_logits = logits[class_mask]  # Shape: (n_cluster_samples, n_classes)
-                                cluster_probs = F.softmax(cluster_logits, dim=1)  # Shape: (n_cluster_samples, n_classes)
-                                
-                                # Compute entropy for each sample: -Σ p_i * log(p_i)
-                                # Add small epsilon to prevent log(0)
-                                cluster_entropy = -torch.sum(cluster_probs * torch.log(cluster_probs + 1e-8), dim=1)
-                                term3 = cluster_entropy.mean()  # Average entropy across cluster samples
-                            else:
-                                term3 = torch.tensor(0.0, device=x.device)
-                        
-                        Li = term1 + robust_weight_base * term2 + entropy_weight * term3
-                        L_total += Li
-                        total_term1 += term1
-                        total_term2 += robust_weight_base * term2
-                        total_term3 += entropy_weight * term3
+                    #     # Compute entropy for each sample: -Σ p_i * log(p_i)
+                    #     # Add small epsilon to prevent log(0)
+                    #     cluster_entropy = -torch.sum(cluster_probs * torch.log(cluster_probs + 1e-8), dim=1)
+                    #     term3 = cluster_entropy.mean()  # Average entropy across cluster samples
+                    # else:
+                    #     term3 = torch.tensor(0.0, device=x.device)
+                    term3 = torch.tensor(0.0, device=x.device)  # Disabled for now
+                    
+                    Li = term1 + robust_weight * term2 + entropy_weight * term3
+                    L_total += Li
+                    total_term1 += term1
+                    total_term2 += robust_weight * term2
+                    total_term3 += entropy_weight * term3
 
-                    num_classes_in_batch = len(unique_classes)
-                    if num_classes_in_batch > 0:
-                        loss = L_total / num_classes_in_batch
-                    else:
-                        loss = loss_vec.mean()  # fallback
-                    
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    
-                    bs = len(y)
-                    
-                    # Average the terms by number of classes to get per-sample equivalent
-                    if num_classes_in_batch > 0:
-                        avg_term1 = total_term1 / num_classes_in_batch
-                        avg_term2 = total_term2 / num_classes_in_batch
-                        avg_term3 = total_term3 / num_classes_in_batch
-                        avg_loss = L_total / num_classes_in_batch
-                    else:
-                        avg_term1 = torch.tensor(0.0, device=x.device)
-                        avg_term2 = torch.tensor(0.0, device=x.device)
-                        avg_term3 = torch.tensor(0.0, device=x.device)
-                        avg_loss = loss_vec.mean()
-                    
-                    total_loss += avg_loss.item() * bs
-                    total_ce_loss += avg_term1.item() * bs
-                    total_rb_loss += avg_term2.item() * bs
-                    total_entropy_loss += avg_term3.item() * bs
-                    total_acc += (logits.argmax(dim=1) == y).sum().item()
-                    total += bs
+                num_classes_in_batch = len(unique_classes)
+                if num_classes_in_batch > 0:
+                    loss = L_total / num_classes_in_batch
+                else:
+                    loss = loss_vec.mean()  # fallback
+                
+                optimizer.zero_grad()
+                loss.backward()
+
+                # if isinstance(self._network, MOSNet):
+                #     self.mask_head_gradients(self._network.backbone, all_tasks=True)
+
+                optimizer.step()
+                
+                bs = len(y)
+                
+                # Average the terms by number of classes to get per-sample equivalent
+                if num_classes_in_batch > 0:
+                    avg_term1 = total_term1 / num_classes_in_batch
+                    avg_term2 = total_term2 / num_classes_in_batch
+                    avg_term3 = total_term3 / num_classes_in_batch
+                    avg_loss = L_total / num_classes_in_batch
+                else:
+                    avg_term1 = torch.tensor(0.0, device=x.device)
+                    avg_term2 = torch.tensor(0.0, device=x.device)
+                    avg_term3 = torch.tensor(0.0, device=x.device)
+                    avg_loss = loss_vec.mean()
+                
+                total_loss += avg_loss.item() * bs
+                total_ce_loss += avg_term1.item() * bs
+                total_rb_loss += avg_term2.item() * bs
+                total_entropy_loss += avg_term3.item() * bs
+                total_acc += (logits.argmax(dim=1) == y).sum().item()
+                total += bs
 
             scheduler.step()
 
@@ -773,3 +766,21 @@ class BaseLearner(object):
             prog_bar.set_description(info)
 
         logging.info(info)
+
+    def mask_head_gradients(self, model, all_tasks=False):
+        for name, param in model.named_parameters():
+            if 'head' in name and param.grad is not None:
+                if 'weight' in name:
+                    mask = torch.zeros_like(param.grad)
+                    if all_tasks:
+                        mask[:self._total_classes] = 1.0
+                    else:
+                        mask[self._known_classes:self._total_classes] = 1.0
+                    param.grad *= mask
+                elif 'bias' in name:
+                    mask = torch.zeros_like(param.grad)
+                    if all_tasks:
+                        mask[:self._total_classes] = 1.0
+                    else:
+                        mask[self._known_classes:self._total_classes] = 1.0
+                    param.grad *= mask

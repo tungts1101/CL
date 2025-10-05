@@ -76,6 +76,12 @@ class Learner(BaseLearner):
     def after_task(self):
         self._known_classes = self._total_classes
 
+        if self._cur_task == self.data_manager.nb_tasks - 1:
+            logging.info("Saving for later robustness evaluation...")
+            saved_path = self.robustness_path(lca=not self.args.get("use_ori", False))
+            logging.info(f"Robustness model save path: {saved_path}")
+            self.save_checkpoint(saved_path)
+
     def incremental_train(self, data_manager):
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)
@@ -111,38 +117,82 @@ class Learner(BaseLearner):
         scheduler = self.get_scheduler(optimizer)
         
         filename = self.checkpoint_path(self._cur_task)
-
+        print(f"Model save path: {filename}")
         if os.path.exists(filename) and not self.args['reset']:
             saved = torch.load(filename)
-            assert saved["tasks"] == self._cur_task
+            # assert saved["tasks"] == self._cur_task
+            # self._network.cpu()
+            # if not self.args.get("use_ori", False) and self._cur_task > 0:
+            #     print("load backbone only")
+            #     # Filter only backbone parameters from saved state dict
+            #     backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
+            #                     if k.startswith("backbone.")}
+            #     self._network.load_state_dict(backbone_state, strict=False)
+            # else:
+            #     self._network.load_state_dict(saved["model_state_dict"])
             self._network.cpu()
-            if not self.args.get("use_ori", False) and self._cur_task > 0:
-                print("load backbone only")
-                # Filter only backbone parameters from saved state dict
-                backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
-                                if k.startswith("backbone.")}
-                self._network.load_state_dict(backbone_state, strict=False)
-            else:
-                self._network.load_state_dict(saved["model_state_dict"])
+            self._network.load_state_dict(saved["model_state_dict"])
         else:
             self._init_train(train_loader, test_loader, optimizer, scheduler)
             self.save_checkpoint(filename)
+
+        # filename = self.checkpoint_path(self._cur_task)
+        # if os.path.exists(filename):
+        #     saved = torch.load(filename)
+        #     self._network.cpu()
+            
+        #     # Filter to load only backbone and current task FC parameters
+        #     saved_state = saved["model_state_dict"]
+        #     current_state = self._network.state_dict()
+            
+        #     # Load backbone parameters
+        #     backbone_state = {k: v for k, v in saved_state.items() 
+        #                     if k.startswith("backbone.")}
+            
+        #     # Load only current task FC parameters (not all previous tasks)
+        #     fc_state = {}
+        #     for k, v in saved_state.items():
+        #         if k.startswith("head."):
+        #             print(k)
+        #             fc_state[k] = copy.deepcopy(current_state[k])
+        #             fc_state[k][self._known_classes:self._total_classes] = v[self._known_classes:self._total_classes]
+            
+        #     # Combine backbone and FC state
+        #     filtered_state = {**backbone_state, **fc_state}
+            
+        #     # Load the filtered state dict
+        #     self._network.load_state_dict(filtered_state, strict=False)
+        # else:
+        #     self._init_train(train_loader, test_loader, optimizer, scheduler)
+        #     self.save_checkpoint(filename)
 
         self._network.to(self._device)
         self._network.backbone.adapter_update()
 
         self._compute_mean(self._network.backbone)
 
-        if not self.args["no_alignment"]:
-            if self.args.get("use_ori", False):
-                if self._cur_task > 0:
-                    self.classifer_align(self._network.backbone)
-            else:
-                self.classifier_alignment(self.data_manager)
+        if self._cur_task > 0:
+            self.classifer_align(self._network.backbone)
+
+        # if not self.args["no_alignment"]:
+        #     if self.args.get("use_ori", False):
+        #         if self._cur_task > 0:
+        #             self.classifer_align(self._network.backbone)
+        #     else:
+        #         self.classifier_alignment(self.data_manager)
+        
+        # if self._cur_task == self.data_manager.nb_tasks - 1:
+        #     saved_path = self.robustness_path(lca=not self.args.get("use_ori", False))
+        #     print(f"Robustness model save path: {saved_path}")
+        #     saved = torch.load(saved_path)
+        #     self._network.cpu()
+        #     self._network.load_state_dict(saved["model_state_dict"], strict=True)
+        #     self._network.to(self._device)
 
     def get_optimizer(self, model):
         base_params = [p for name, p in model.named_parameters() if 'adapter' in name and p.requires_grad]
         base_fc_params = [p for name, p in model.named_parameters() if 'adapter' not in name and p.requires_grad]
+
         base_params = {'params': base_params, 'lr': self.init_lr, 'weight_decay': self.weight_decay}
         base_fc_params = {'params': base_fc_params, 'lr': self.init_lr *0.1, 'weight_decay': self.weight_decay}
         network_params = [base_params, base_fc_params]
@@ -193,6 +243,9 @@ class Learner(BaseLearner):
 
                 optimizer.zero_grad()
                 loss.backward()
+
+                # self.mask_head_gradients(self._network.backbone, all_tasks=False)
+                
                 optimizer.step()
                 
                 # # using EMA method to merge adapters
@@ -272,8 +325,8 @@ class Learner(BaseLearner):
     def classifer_align(self, model):
         model.train()
         
-        self.crct_epochs = self.args.get("ori_crct_epochs", 30)
-        self.ca_lr = self.args.get("ori_ca_lr", 0.005)
+        self.crct_epochs = self.args.get("ori_crct_epochs", 30) if not self.args["lca"] else self.args.get("crct_epochs", 10)
+        self.ca_lr = self.args.get("ori_ca_lr", 0.005) if not self.args["lca"] else self.args.get("ca_lr", 0.001)
 
         run_epochs = self.crct_epochs
 
@@ -281,12 +334,16 @@ class Learner(BaseLearner):
         network_params = [{'params': param_list, 'lr': self.ca_lr, 'weight_decay': self.weight_decay}]
         optimizer = optim.SGD(network_params, lr=self.ca_lr, momentum=0.9, weight_decay=5e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=run_epochs)
+        # scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=run_epochs)
 
         prog_bar = tqdm(range(run_epochs))
         for epoch in prog_bar:
             sampled_data = []
             sampled_label = []
-            num_sampled_pcls = self.batch_size * 5
+            if self.args["lca"]:
+                num_sampled_pcls = self.args["ca_sample_per_cls"]
+            else:
+                num_sampled_pcls = self.batch_size * 5
 
             if self.args["ca_storage_efficient_method"] in ['covariance', 'variance']:
                 for class_idx in range(self._total_classes):
@@ -326,17 +383,52 @@ class Learner(BaseLearner):
             sf_indexes = torch.randperm(inputs.size(0))
             inputs = inputs[sf_indexes]
             targets = targets[sf_indexes]
-            
+            robust_weight = self.args.get("ca_robust_weight", 0.0)
+            entropy_weight = self.args.get("ca_entropy_weight", 0.0)
+
             losses = 0.0
+            reg_losses = 0.0
             correct, total = 0, 0
             for _iter in range(self._total_classes):
                 inp = inputs[_iter * num_sampled_pcls:(_iter + 1) * num_sampled_pcls]
                 tgt = targets[_iter * num_sampled_pcls:(_iter + 1) * num_sampled_pcls]
+
                 outputs = model(inp, fc_only=True)
                 logits = outputs['logits'][:, :self._total_classes]
 
-                loss = F.cross_entropy(logits, tgt)
-                
+                if self.args["lca"]:
+                    loss_vec = F.cross_entropy(logits, tgt, reduction='none')
+                    unique_classes = torch.unique(tgt)
+                    
+                    total_reg_loss = torch.tensor(0.0, device=inp.device)
+                    
+                    for class_i in unique_classes:
+                        label_mask = (tgt == class_i)
+                        class_losses = loss_vec[label_mask]
+                        
+                        # Regularization term: minimize pairwise differences of losses within same class
+                        # Similar to term2: E_{x,x'~Ni}[|ℓ(yi, ht+1(x)) - ℓ(yi, ht+1(x'))|]
+                        if len(class_losses) >= 2:
+                            pairwise_diffs = torch.abs(
+                                class_losses.unsqueeze(1) - class_losses.unsqueeze(0)
+                            )
+                            # Remove diagonal (self-comparisons)
+                            mask = ~torch.eye(len(class_losses), dtype=torch.bool, device=inp.device)
+                            pairwise_diffs = pairwise_diffs[mask]
+                            total_reg_loss += pairwise_diffs.mean()
+                        
+                        # class_probs = F.softmax(logits[label_mask], dim=1)
+                        # class_entropy = -torch.sum(class_probs * torch.log(class_probs + 1e-8), dim=1)
+                        # total_reg_loss += class_entropy.mean()
+                    
+                    if len(unique_classes) > 0:
+                        total_reg_loss /= len(unique_classes)
+                    
+                    loss = loss_vec.mean() + robust_weight * total_reg_loss
+                    reg_losses += total_reg_loss
+                else:
+                    loss = F.cross_entropy(logits, tgt)
+
                 _, preds = torch.max(logits, dim=1)
                 
                 correct += preds.eq(tgt.expand_as(preds)).cpu().sum()
@@ -347,15 +439,26 @@ class Learner(BaseLearner):
                 optimizer.step()
                 losses += loss
 
-            scheduler.step()
+            # scheduler.step()
             ca_acc = np.round(tensor2numpy(correct) * 100 / total, decimals=2)
-            info = "Task {}, Epoch {}/{} => Loss {:.3f}, CA_accy {:.2f}".format(
-                self._cur_task,
-                epoch + 1,
-                self.crct_epochs,
-                losses / self._total_classes,
-                ca_acc,
-            )
+
+            if self.args["lca"]:
+                info = "Task {}, Epoch {}/{} => Loss {:.3f}, Reg_loss {:.3f}, CA_accy {:.2f}".format(
+                    self._cur_task,
+                    epoch + 1,
+                    self.crct_epochs,
+                    losses / self._total_classes,
+                    reg_losses / self._total_classes,
+                    ca_acc,
+                )
+            else:
+                info = "Task {}, Epoch {}/{} => Loss {:.3f}, CA_accy {:.2f}".format(
+                    self._cur_task,
+                    epoch + 1,
+                    self.crct_epochs,
+                    losses / self._total_classes,
+                    ca_acc,
+                )
             prog_bar.set_description(info)
 
         logging.info(info)

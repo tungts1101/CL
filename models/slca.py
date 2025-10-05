@@ -85,14 +85,15 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            if not self.args.get("use_ori", False) and self._cur_task > 0:
-                print("load backbone only")
-                # Filter only backbone parameters from saved state dict
-                backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
-                                if k.startswith("backbone.")}
-                self._network.load_state_dict(backbone_state, strict=False)
-            else:
-                self._network.load_state_dict(saved["model_state_dict"])
+            # if not self.args.get("use_ori", False) and self._cur_task > 0:
+            #     print("load backbone only")
+            #     # Filter only backbone parameters from saved state dict
+            #     backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
+            #                     if k.startswith("backbone.")}
+            #     self._network.load_state_dict(backbone_state, strict=False)
+            # else:
+            #     self._network.load_state_dict(saved["model_state_dict"])
+            self._network.load_state_dict(saved["model_state_dict"])
         else:
             self._stage1_training(self.train_loader, self.test_loader)
             self.save_checkpoint(filename)
@@ -108,13 +109,18 @@ class Learner(BaseLearner):
             # if self.save_before_ca:
                 # self.save_checkpoint(self.log_path+'/'+self.model_prefix+'_seed{}_before_ca'.format(self.seed), head_only=self.fix_bcb)
         
-        if not self.args["no_alignment"]:
-            if self.args.get("use_ori", False):
-                self._compute_class_mean(data_manager)
-                if self._cur_task > 0 and self.ca_epochs > 0:
-                    self._stage2_compact_classifier(task_size, data_manager)
-            else:
-                self.classifier_alignment(data_manager)
+        # if not self.args["no_alignment"]:
+        #     if self.args.get("use_ori", False):
+        #         self._compute_class_mean(data_manager)
+        #         if self._cur_task > 0 and self.ca_epochs > 0:
+        #             self._stage2_compact_classifier(task_size, data_manager)
+        #     else:
+        #         self.classifier_alignment(data_manager)
+
+
+        self._compute_class_mean(data_manager)
+        if self._cur_task > 0:
+            self._stage2_compact_classifier(task_size, data_manager)
         
 
     def _run(self, train_loader, test_loader, optimizer, scheduler):
@@ -190,12 +196,16 @@ class Learner(BaseLearner):
         for p in self._network.fc.parameters():
             p.requires_grad=True
 
-        run_epochs = self.ca_epochs
-        crct_num = self._total_classes    
+        robust_weight = self.args.get("ca_robust_weight", 0.0)
+        
+        run_epochs = self.ca_epochs if not self.args["lca"] else self.args.get("crct_epochs", 10)
+        ca_lr = self.lrate if not self.args["lca"] else self.args.get("ca_lr", 0.001)
+
+        crct_num = self._total_classes   
         param_list = [p for p in self._network.fc.parameters() if p.requires_grad]
-        network_params = [{'params': param_list, 'lr': self.lrate,
+        network_params = [{'params': param_list, 'lr': ca_lr,
                         'weight_decay': self.weight_decay}]
-        optimizer = optim.SGD(network_params, lr=self.lrate, momentum=0.9, weight_decay=self.weight_decay)
+        optimizer = optim.SGD(network_params, lr=ca_lr, momentum=0.9, weight_decay=self.weight_decay)
         # scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[4], gamma=lrate_decay)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=run_epochs)
 
@@ -206,10 +216,11 @@ class Learner(BaseLearner):
         self._network.eval()
         for epoch in range(run_epochs):
             losses = 0.
+            reg_losses = 0.
 
             sampled_data = []
             sampled_label = []
-            num_sampled_pcls = 256
+            num_sampled_pcls = 256 if not self.args["lca"] else self.args.get("ca_sample_per_cls", 512)
         
             for c_id in range(crct_num):
                 t_id = c_id//task_size
@@ -233,7 +244,9 @@ class Learner(BaseLearner):
             inputs = inputs[sf_indexes]
             targets = targets[sf_indexes]
 
-            
+            if epoch == 0:
+                print(f"Sampled data shape: {inputs.shape}")
+
             for _iter in range(crct_num):
                 inp = inputs[_iter*num_sampled_pcls:(_iter+1)*num_sampled_pcls]
                 tgt = targets[_iter*num_sampled_pcls:(_iter+1)*num_sampled_pcls]
@@ -254,20 +267,58 @@ class Learner(BaseLearner):
                         
                     norms_all = torch.norm(logits[:, :crct_num], p=2, dim=-1, keepdim=True) + 1e-7
                     decoupled_logits = torch.div(logits[:, :crct_num], norms) / self.logit_norm
-                    loss = F.cross_entropy(decoupled_logits, tgt)
 
+                    loss_vec = F.cross_entropy(decoupled_logits, tgt, reduction='none')
+                    # class_probs = F.softmax(decoupled_logits, dim=1)
                 else:
-                    loss = F.cross_entropy(logits[:, :crct_num], tgt)
+                    loss_vec = F.cross_entropy(logits[:, :crct_num], tgt, reduction='none')
+                    # class_probs = F.softmax(logits[:, :crct_num], dim=1)
+
+                if self.args["lca"]:
+                    unique_classes = torch.unique(tgt)
+                    total_reg_loss = torch.tensor(0.0, device=inp.device)
+                    
+                    for class_i in unique_classes:
+                        label_mask = (tgt == class_i)
+                        class_losses = loss_vec[label_mask]
+                        
+                        # Regularization term: minimize pairwise differences of losses within same class
+                        # Similar to term2: E_{x,x'~Ni}[|ℓ(yi, ht+1(x)) - ℓ(yi, ht+1(x'))|]
+                        if len(class_losses) >= 2:
+                            pairwise_diffs = torch.abs(
+                                class_losses.unsqueeze(1) - class_losses.unsqueeze(0)
+                            )
+                            # Remove diagonal (self-comparisons)
+                            mask = ~torch.eye(len(class_losses), dtype=torch.bool, device=inp.device)
+                            pairwise_diffs = pairwise_diffs[mask]
+                            total_reg_loss += pairwise_diffs.mean()
+                        
+                        # class_entropy = -torch.sum(class_probs * torch.log(class_probs + 1e-8), dim=1)
+                        # total_reg_loss += class_entropy.mean()
+                    
+                    if len(unique_classes) > 0:
+                        total_reg_loss /= len(unique_classes)
+                    
+                    loss = loss_vec.mean() + robust_weight * total_reg_loss
+                    reg_losses += total_reg_loss
+                else:
+                    loss = loss_vec.mean()
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 losses += loss.item()
 
-            scheduler.step()
+            # scheduler.step()
             test_acc = self._compute_accuracy(self._network, self.test_loader)
-            info = 'CA Task {} => Loss {:.3f}, Test_accy {:.3f}'.format(
-                self._cur_task, losses/self._total_classes, test_acc)
+
+            if self.args["lca"]:
+                info = 'CA Task {}, Epoch {}/{} => Loss {:.3f}, Reg_loss {:.3f}, Test_accy {:.3f}'.format(
+                    self._cur_task, epoch+1, run_epochs, losses/crct_num, reg_losses/crct_num, test_acc)
+            else:
+                info = 'CA Task {}, Epoch {}/{} => Loss {:.3f}, Test_accy {:.3f}'.format(
+                    self._cur_task, epoch+1, run_epochs, losses/crct_num, test_acc)
+            
             logging.info(info)
 
     def _compute_class_mean(self, data_manager):

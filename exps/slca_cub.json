@@ -23,10 +23,10 @@
 
     "use_ori": true,
 
-    "crct_epochs": 10,
-    "ca_sample_per_cls": 512,
+    "crct_epochs": 5,
+    "ca_sample_per_cls": 1024,
     "ca_batch_size": 128,
-    "ca_lr": 0.01,
+    "ca_lr": 0.005,
     "ca_robust_weight": 0.1,
     "ca_entropy_weight": 0.1,
     "ca_logit_norm": 0.1

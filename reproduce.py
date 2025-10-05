@@ -89,16 +89,16 @@ def main():
         # "dualprompt",
         # "slca",
         "mos",
-        # "ease"
+        "ease"
     ]
     DATASETS = [
-        # "cifar",
-        # "inr",
-        # "ina",
-        # "cub",
-        # "omni",
-        # "vtab",
-        # "cars"
+        "cifar",
+        "inr",
+        "ina",
+        "cub",
+        "omni",
+        "vtab",
+        "cars"
     ]
 
     try:

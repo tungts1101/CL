@@ -255,14 +255,15 @@ class Learner(BaseLearner):
             saved = torch.load(filename)
             assert saved["tasks"] == self._cur_task
             self._network.cpu()
-            if not self.args.get("use_ori", False) and self._cur_task > 0:
-                print("load backbone only")
-                # Filter only backbone parameters from saved state dict
-                backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
-                                if k.startswith("backbone.")}
-                self._network.load_state_dict(backbone_state, strict=False)
-            else:
-                self._network.load_state_dict(saved["model_state_dict"])
+            # if not self.args.get("use_ori", False) and self._cur_task > 0:
+            #     print("load backbone only")
+            #     # Filter only backbone parameters from saved state dict
+            #     backbone_state = {k: v for k, v in saved["model_state_dict"].items() 
+            #                     if k.startswith("backbone.")}
+            #     self._network.load_state_dict(backbone_state, strict=False)
+            # else:
+            #     self._network.load_state_dict(saved["model_state_dict"])
+            self._network.load_state_dict(saved["model_state_dict"])
         else:
             self._train(self.train_loader, self.test_loader)
             if len(self._multiple_gpus) > 1:

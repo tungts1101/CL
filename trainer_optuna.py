@@ -18,29 +18,22 @@ from pathlib import Path
 
 
 def suggest_hyperparameters(trial):
-    # ca_lr = trial.suggest_categorical("train_ca_lr", [1e-4, 1e-3, 1e-2])
-    ca_lr = trial.suggest_float("train_ca_lr", 1e-4, 1e-2)
+    ca_lr = trial.suggest_categorical("ca_lr", [5e-3, 1e-2])
+    # ca_lr = trial.suggest_float("train_ca_lr", 1e-4, 1e-2)
 
-    # robust_weight_log = trial.suggest_categorical("robust_weight_log", [-4, -3, -2, -1, 0, 1, 2, 3, 4])
-    robust_weight_log = trial.suggest_float("robust_weight_log", -3, 3)
-    robust_weight = 10**robust_weight_log
+    ca_robust_weight = trial.suggest_categorical("ca_robust_weight", [0.05, 0.1, 0.5, 1.0])
 
     # entropy_weight_log = trial.suggest_categorical("entropy_weight_log", [-2, -1, 0, 1, 2])
-    entropy_weight_log = trial.suggest_float("entropy_weight_log", -3, 3)
-    entropy_weight = 10**entropy_weight_log
-
-    ca_logit_norm = trial.suggest_float("ca_logit_norm", 0.1, 1.0)
-
-    ca_lr = round(ca_lr, 5)
-    robust_weight = round(robust_weight, 5)
-    entropy_weight = round(entropy_weight, 5)
-    ca_logit_norm = round(ca_logit_norm, 2)
+    # entropy_weight_log = trial.suggest_float("entropy_weight_log", -2, 0)
+    # entropy_weight = 10**entropy_weight_log
 
     return {
         "ca_lr": ca_lr,
-        "ca_robust_weight": robust_weight,
-        "ca_entropy_weight": entropy_weight,
-        "ca_logit_norm": ca_logit_norm
+        "ca_robust_weight": ca_robust_weight,
+        "ca_sample_per_cls": 1024,
+        "ca_batch_size": 128,
+        "ca_entropy_weight": 0.0,
+        "ca_logit_norm": 0.0
     }
 
 
@@ -415,7 +408,7 @@ def train(args, pruning_thresholds=None):
         args["nb_classes"] = data_manager.nb_classes
         args["nb_tasks"] = data_manager.nb_tasks
 
-        n_trials = args.get("n_trials", 100)
+        n_trials = args.get("n_trials", 20)
         early_stop_patience = args.get("early_stop_patience", None)
         max_time_hours = args.get("max_time_hours", None)
         max_failed_trials = args.get("max_failed_trials", None)
