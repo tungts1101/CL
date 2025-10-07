@@ -81,36 +81,37 @@ class AlignmentLearner(BaseMergingLearner):
                 self._cls_means[cls_idx, :] = class_mean
                 self._cls_covs[cls_idx, ...] = class_cov
         
-        if self.args["train_merge"] != "none":
+        if self.args["train_merge_method"] != "none":
             self.merge()
         
         if self._cur_task == 0:
             return
 
-        if (
-            os.path.exists(self.head_alignment_checkpoint(self._cur_task))
-            and not self.args["reset"]
-        ):
-            logging.info(
-                f"[Merging] Load existing alignment checkpoint"
-            )
-            self._network.fc.load_state_dict(
-                torch.load(self.head_alignment_checkpoint(self._cur_task)), strict=True
-            )
-        else:
-            if train_ca_method == "sgd":
-                self._align_sgd()
-            elif train_ca_method == "nes":
-                self._align_nes()
-            elif train_ca_method == "projection":
-                self._align_projection()
-            else:
-                raise ValueError(f"Unknown alignment method {train_ca_method}")
+        # if (
+        #     os.path.exists(self.head_alignment_checkpoint(self._cur_task))
+        #     and not self.args["reset"]
+        # ):
+        #     logging.info(
+        #         f"[Merging] Load existing alignment checkpoint"
+        #     )
+        #     self._network.fc.load_state_dict(
+        #         torch.load(self.head_alignment_checkpoint(self._cur_task)), strict=True
+        #     )
+        # else:
+        #     if train_ca_method == "sgd":
+        #         self._align_sgd()
+        #     elif train_ca_method == "nes":
+        #         self._align_nes()
+        #     elif train_ca_method == "projection":
+        #         self._align_projection()
+        #     else:
+        #         raise ValueError(f"Unknown alignment method {train_ca_method}")
 
-            torch.save(
-                self._network.fc.state_dict(),
-                self.head_alignment_checkpoint(self._cur_task),
-            )
+        #     torch.save(
+        #         self._network.fc.state_dict(),
+        #         self.head_alignment_checkpoint(self._cur_task),
+        #     )
+        self._align_sgd()
 
     def _align_sgd(self):
         epochs = self.args.get("train_ca_epochs", 10)

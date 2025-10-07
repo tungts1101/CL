@@ -49,4 +49,7 @@ class SimpleNet(nn.Module):
     def __repr__(self):
         trainable_params = count_parameters(self, trainable=True)
         total_params = count_parameters(self)
-        return f"Model(trainable_params={trainable_params:,}, total_params={total_params:,}, percentage={trainable_params * 100 / total_params:.2f})"
+        backbone_trainable_params = count_parameters(self.backbone, trainable=True)
+        backbone_total_params = count_parameters(self.backbone)
+        return f"Model(trainable_params={trainable_params:,}, total_params={total_params:,}, percentage={trainable_params * 100 / total_params:.2f})\n" \
+               f"Backbone: trainable_params={backbone_trainable_params:,}, total_params={backbone_total_params:,}, percentage={backbone_trainable_params * 100 / backbone_total_params:.2f}"

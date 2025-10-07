@@ -9,6 +9,9 @@ from models.base import BaseLearner
 import os
 from .utils import merge
 from utils.net import SimpleNet
+from utils.inc_net import SimpleContinualLinear
+import copy
+import timm
 
 
 num_workers = 8
@@ -39,6 +42,8 @@ class BaseMergingLearner(BaseLearner):
             self._network.get_backbone_trainable_params(),
             self.backbone_checkpoint(self._cur_task),
         )
+        
+        self.fast_classifier = None
         
     def after_task(self):
         self._known_classes = self._total_classes
@@ -85,6 +90,19 @@ class BaseMergingLearner(BaseLearner):
             freeze_old=freeze_old,
         )
         self._network.to(self._device)
+        
+        if self.args.get("ensemble", False):
+            feature_extractor = timm.create_model("vit_base_patch16_224",pretrained=True, num_classes=0)
+            self.feature_extractor = feature_extractor.to(self._device)
+            self.feature_extractor.eval()
+            
+            if self.fast_classifier is None:
+                self.fast_classifier = SimpleContinualLinear(
+                    self._network.feature_dim, self._total_classes, feat_expand=False, with_norm=False, with_bias=False
+                )
+            else:
+                self.fast_classifier.update(self._total_classes - self._known_classes, freeze_old=True)
+            self.fast_classifier.to(self._device)
         
         if (
             not os.path.exists(self.backbone_checkpoint(self._cur_task))
@@ -147,9 +165,17 @@ class BaseMergingLearner(BaseLearner):
 
             self._network.train()
             logging.info(f"[Training] {self._network}")
+            
+            train_merge_reg = self.args.get("train_merge_reg", "none")
+            if train_merge_reg in ["l1", "l2"]:
+                train_merge_reg_coef = self.args.get("train_merge_reg_coef", 1.0)
+                if self._cur_task > 0:
+                    last_backbone_params = torch.load(self.backbone_checkpoint(self._cur_task - 1))
+                    last_backbone_params = torch.cat([p.view(-1) for p in last_backbone_params.values()]).to(self._device)
 
             for epoch in range(epochs):
                 total_loss, total_acc, total = 0, 0, 0
+                total_reg = 0.0
 
                 for _, (_, x, y) in enumerate(train_loader):
                     x, y = x.to(self._device), y.to(self._device)
@@ -165,6 +191,16 @@ class BaseMergingLearner(BaseLearner):
                         logits = self._network.fc(features)["logits"]
 
                     loss = F.cross_entropy(logits, y)
+                    if self._cur_task > 0:
+                        if train_merge_reg in ["l1", "l2"]:
+                            backbone_params = self._network.get_backbone_trainable_params()
+                            backbone_params = torch.cat([p.view(-1) for p in backbone_params.values()])
+                            if train_merge_reg == "l1":
+                                reg = F.smooth_l1_loss(backbone_params, last_backbone_params, reduction='sum')
+                            elif train_merge_reg == "l2":
+                                reg = F.mse_loss(backbone_params, last_backbone_params, reduction='sum')
+                            loss += train_merge_reg_coef * reg
+                            total_reg += reg.item()
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -180,6 +216,7 @@ class BaseMergingLearner(BaseLearner):
                     logging.info(
                         f"[Training] Epoch {epoch + 1}/{epochs}, "
                         f"Total Loss: {total_loss / total:.4f}, "
+                        f"Reg: {total_reg / (total):.4f}, "
                         f"Acc: {total_acc / total:.4f}"
                     )
 
@@ -191,6 +228,56 @@ class BaseMergingLearner(BaseLearner):
                 self._network.fc.heads[-1].state_dict(),
                 self.head_checkpoint(self._cur_task),
             )
+            
+            if self.args.get("ensemble", False):
+                # self._network.backbone.load_state_dict(
+                #     torch.load(self.backbone_checkpoint(0)), strict=False
+                # )
+                epochs = self.args['tuned_epoch']
+                base_lr = self.init_lr
+                weight_decay = self.weight_decay
+
+                optimizer = optim.SGD(self.fast_classifier.parameters(), momentum=0.9)
+                scheduler = optim.lr_scheduler.CosineAnnealingLR( optimizer, T_max=epochs, eta_min=self.min_lr)
+
+                logging.info(f"[Training Fast Classifier] {self.fast_classifier}")
+                
+                for epoch in range(epochs):
+                    total_loss, total_acc, total = 0, 0, 0
+
+                    for _, (_, x, y) in enumerate(train_loader):
+                        x, y = x.to(self._device), y.to(self._device)
+
+                        features = self.feature_extractor(x)
+
+                        y = torch.where(
+                            y - self._known_classes >= 0, y - self._known_classes, -100
+                        )
+                        logits = self.fast_classifier.heads[self._cur_task](features)
+
+                        loss = F.cross_entropy(logits, y)
+
+                        optimizer.zero_grad()
+                        loss.backward()
+                        optimizer.step()
+
+                        total_loss += loss.item() * len(y)
+                        total_acc += (logits.argmax(dim=1) == y).sum().item()
+                        total += len(y)
+
+                    scheduler.step()
+
+                    if epoch % 5 == 4 or epoch == epochs - 1:
+                        logging.info(
+                            f"[Training Fast Classifier] Epoch {epoch + 1}/{epochs}, "
+                            f"Total Loss: {total_loss / total:.4f}, "
+                            f"Acc: {total_acc / total:.4f}"
+                        )
+
+                torch.save(
+                    self.fast_classifier.state_dict(),
+                    self.fast_classifier_checkpoint(self._cur_task),
+                )
         else:
             logging.info(f"[Training] Load existing model for task {self._cur_task}")
             self._network.backbone.load_state_dict(
@@ -199,6 +286,13 @@ class BaseMergingLearner(BaseLearner):
             self._network.fc.heads[-1].load_state_dict(
                 torch.load(self.head_checkpoint(self._cur_task)), strict=True
             )
+            if self.args.get("ensemble", False):
+                checkpoint = self.fast_classifier_checkpoint(self._cur_task)
+                if os.path.exists(checkpoint) and not self.args.get("reset", False):
+                    logging.info(f"[Training Fast Classifier] Load existing fast classifier for task {self._cur_task}")
+                    self.fast_classifier.load_state_dict(
+                        torch.load(checkpoint), strict=True
+                    )
     
     def load_backbone(self, backbone_params):
         peft_params = {}
@@ -230,7 +324,7 @@ class BaseMergingLearner(BaseLearner):
             )
             return
 
-        logging.info(f"[Merging] Method {self.args['train_merge']}")
+        logging.info(f"[Merging] Method {self.args['train_merge_method']}")
         base_params = torch.load(self.backbone_checkpoint(-1))
         num_merged_params = sum(param.numel() for param in base_params.values())
         logging.info(f"[Merging] Merging with {num_merged_params:,} total parameters")
@@ -253,7 +347,7 @@ class BaseMergingLearner(BaseLearner):
         backbone_params = merge(
             base_params,
             task_params,
-            method=self.args["train_merge"],
+            method=self.args["train_merge_method"],
             lamb=self.args["train_merge_coef"],
             topk=self.args["train_merge_topk"],
         )
@@ -271,11 +365,41 @@ class BaseMergingLearner(BaseLearner):
             self.merged_checkpoint(self._cur_task),
         )
     
+    def _eval_cnn(self, loader):
+        self._network.eval()
+        y_pred, y_true = [], []
+        
+        # if self.args.get("ensemble", False) and self.fast_classifier is not None:
+        #     first_session_backbone = copy.deepcopy(self._network.backbone)
+        #     first_session_backbone.load_state_dict(
+        #         torch.load(self.backbone_checkpoint(0)), strict=False
+        #     )
+        #     first_session_backbone.eval()
+        
+        for _, (_, inputs, targets) in enumerate(loader):
+            inputs = inputs.to(self._device)
+            with torch.no_grad():
+                outputs = self._network(inputs)["logits"]
+                if self.args.get("ensemble", False) and self.fast_classifier is not None:
+                    features = self.feature_extractor(inputs)
+                    fast_outputs = self.fast_classifier(features)["logits"]
+                    outputs = outputs + fast_outputs
+                
+            predicts = torch.topk(
+                outputs, k=self.topk, dim=1, largest=True, sorted=True
+            )[
+                1
+            ]  # [bs, topk]
+            
+            y_pred.append(predicts.cpu().numpy())
+            y_true.append(targets.cpu().numpy())
+
+        return np.concatenate(y_pred), np.concatenate(y_true)  # [N, topk]
+    
     def prefix(self):
         prefix_parts = [
             str(self.args['seed']),
             self.args['dataset'], 
-            str(self.args['init_cls']),
             self.args['model_name'],
             self.args['backbone_type'],
             self.args['train_ca_method']
@@ -288,6 +412,10 @@ class BaseMergingLearner(BaseLearner):
 
     def head_checkpoint(self, task):
         filename = f"{self.prefix()}_head_{task}.pt"
+        return os.path.join(self.CHECKPOINT_DIR, filename)
+
+    def fast_classifier_checkpoint(self, task):
+        filename = f"{self.prefix()}_fast_classifier_{task}.pt"
         return os.path.join(self.CHECKPOINT_DIR, filename)
 
     def merged_checkpoint(self, task):

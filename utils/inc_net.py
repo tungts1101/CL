@@ -86,7 +86,8 @@ def get_backbone(args, pretrained=False):
 
     elif '_adapter' in name:
         ffn_num = args["ffn_num"]
-        if args["model_name"] == "aper_adapter" or args["model_name"] == "ranpac" or args["model_name"] == "fecam":
+        if args["model_name"] == "aper_adapter" or args["model_name"] == "ranpac" or args["model_name"] == "fecam" or \
+            args["model_name"] == "base_merging" or args["model_name"] == "alignment":
             from backbone import vit_adapter
             from easydict import EasyDict
             tuning_config = EasyDict(
