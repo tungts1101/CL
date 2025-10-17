@@ -29,7 +29,7 @@ class DataManager(object):
     @property
     def nb_classes(self):
         return len(self._class_order)
-
+    
     def get_dataset(
         self, indices, source, mode, appendent=None, ret_data=False, m_rate=None
     ):
@@ -144,6 +144,8 @@ class DataManager(object):
         self._train_data, self._train_targets = idata.train_data, idata.train_targets
         self._test_data, self._test_targets = idata.test_data, idata.test_targets
         self.use_path = idata.use_path
+        
+        self.train_set_size = len(self._train_data)
 
         # Transforms
         self._train_trsf = idata.train_trsf

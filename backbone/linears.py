@@ -42,6 +42,7 @@ class CosineLinear(nn.Module):
         self.nb_proxy = nb_proxy
         self.to_reduce = to_reduce
         self.weight = nn.Parameter(torch.Tensor(self.out_features, in_features))
+        self.bias = None
         if sigma:
             self.sigma = nn.Parameter(torch.Tensor(1))
         else:

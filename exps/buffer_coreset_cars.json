@@ -1,20 +1,20 @@
 {
     "prefix": "reproduce",
-    "dataset": "imageneta",
+    "dataset": "cifar224",
     "memory_size": 0,
     "memory_per_class": 0,
     "fixed_memory": false,
     "shuffle": true,
-    "init_cls": 20,
+    "init_cls": 16,
     "increment": 20,
-    "model_name": "alignment",
+    "model_name": "buffer_coreset",
     "backbone_type": "vit_base_patch16_224_lora",
     "device": ["0"],
     "seed": [1993],
 
     "tuned_epoch": 10,
     "init_lr": 1e-2,
-    "batch_size": 32,
+    "batch_size": 64,
     "weight_decay": 5e-4,
     "min_lr": 1e-6,
     "optimizer": "sgd",
@@ -25,24 +25,14 @@
     "model_lora_target_modules": ["qkv"],
     "model_lora_dropout": 0.0,
 
-    "train_freeze_old": false,
     "train_merge_method": "ties",
-    "train_merge_reg": "l1",
     "train_merge_coef": 1.0,
     "train_merge_topk": 100,
     "train_merge_incremental": false,
 
     "train_buffer": true,
-    "train_buffer_type": "balance",
-    "train_buffer_size": 0.05,
-    "train_buffer_decay": 1.0,
-    "train_with_buffer": true,
-    "train_robustness": false,
-
-    "train_ca_method": "sgd",
-    "train_ca_epochs": 5,
-    "train_ca_lr": 5e-3,
-    "train_ca_samples_per_class": 512,
-    "train_ca_batch_size": 128
+    "train_buffer_type": "coreset",
+    "train_buffer_size": 0.01,
+    "train_buffer_decay": 1.0
 }
 

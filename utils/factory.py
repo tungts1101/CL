@@ -52,6 +52,10 @@ def get_model(model_name, args):
         from models.merging import BaseMergingLearner as Learner
     elif name == 'alignment':
         from models.alignment import AlignmentLearner as Learner
+    elif name == 'buffer_analytic':
+        from models.buffer_analytic import BufferAnalyticLearner as Learner
+    elif name == 'buffer_coreset':
+        from models.buffer_coreset import BufferCoresetLearner as Learner
     else:
         assert 0
     return Learner(args)

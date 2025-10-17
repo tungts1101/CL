@@ -168,9 +168,10 @@ def merge(base_params, tasks_params, method="ties", lamb=1.0, topk=100):
 # tune the model at first session with adapter, and then conduct simplecil.
 num_workers = 8
 EPSILON = 1e-8
-CHECKPOINT_DIR = "/home/lis/checkpoints"
 
 class Learner(BaseLearner):
+    CHECKPOINT_DIR = "checkpoints"
+    
     def __init__(self, args):
         super().__init__(args)
         self._network = SimpleVitNet(args, True)
@@ -539,16 +540,16 @@ class Learner(BaseLearner):
         prefix_parts = [
             str(self.args['seed']),
             self.args['dataset'], 
-            str(self.args['init_cls']),
-            str(self.args['increment']),
-            self.args['backbone_type']
+            self.args['model_name'],
+            self.args['backbone_type'],
+            self.args['train_ca_method']
         ]
         return "_".join(prefix_parts)
 
     def backbone_checkpoint(self, task=-1):
-        return f"{CHECKPOINT_DIR}{self.prefix()}_backbone" + (
-            f"_{task}.pt" if task >= 0 else "_base.pt"
-        )
+        filename = f"{self.prefix()}_backbone" + (f"_{task}.pt" if task >= 0 else "_base.pt")
+        return os.path.join(self.CHECKPOINT_DIR, filename)
 
     def head_checkpoint(self, task):
-        return f"{CHECKPOINT_DIR}{self.prefix()}_head_{task}.pt"
+        filename = f"{self.prefix()}_head_{task}.pt"
+        return os.path.join(self.CHECKPOINT_DIR, filename)

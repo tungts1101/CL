@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 from utils.toolkit import split_images_labels
 
 
-DEFAULT_DATA_ROOT_PATH = "/home/lis/data"
+DEFAULT_DATA_ROOT_PATH = "/home/surgery/Workspaces/data"
 
 data_root_path = DEFAULT_DATA_ROOT_PATH
 

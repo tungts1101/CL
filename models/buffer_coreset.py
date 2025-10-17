@@ -15,14 +15,14 @@ import timm
 import random
 from collections import OrderedDict
 from typing import Optional
-from .buffer import RandomReplayBuffer, BalanceReplayBuffer, MaxEntropyReplayBuffer
+from .buffer import RandomReplayBuffer, BalanceReplayBuffer, MaxEntropyReplayBuffer, CoresetReplayBuffer
 
 
 num_workers = 8
 EPSILON = 1e-8
 
 
-class BaseMergingLearner(BaseLearner):
+class BufferCoresetLearner(BaseLearner):
     CHECKPOINT_DIR = "checkpoints"
     def __init__(self, args):
         super().__init__(args)
@@ -87,6 +87,9 @@ class BaseMergingLearner(BaseLearner):
                     self._buffer = BalanceReplayBuffer(total_capacity, decay=buffer_decay, seed=buffer_seed)
                 elif buffer_type == "max_entropy":
                     self._buffer = MaxEntropyReplayBuffer(total_capacity, decay=buffer_decay, seed=buffer_seed)
+                elif buffer_type == "coreset":
+                    self._buffer = CoresetReplayBuffer(total_capacity, decay=buffer_decay, seed=buffer_seed)
+                    self._buffer.add_model(copy.deepcopy(self._network.backbone.eval()))
                 else:
                     raise ValueError(f"Unknown buffer type: {buffer_type}")
 
@@ -94,50 +97,42 @@ class BaseMergingLearner(BaseLearner):
             print('Multiple GPUs')
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         
-        self._train(self.train_loader)
-
-        if len(self._multiple_gpus) > 1:
-            self._network = self._network.module
+        if self._cur_task == 0 and isinstance(self._buffer, CoresetReplayBuffer):
+            self._first_session_training(self.train_loader)
+        
+        if isinstance(self._buffer, CoresetReplayBuffer):
+            self._buffer.add_cls_mean(self.data_manager, self._known_classes, self._total_classes)
         
         if self.args.get("train_buffer", False) and self._buffer:
             self._network.eval()
             with torch.no_grad():
                 for _, x, y in self.prototype_loader:
                     x, y = x.cuda(), y.cuda()
-                    if isinstance(self._buffer, MaxEntropyReplayBuffer):
-                        f = self._network.get_features(x)
-                        z = self._network.fc.heads[-1](f)
-                    else:
-                        z = self._network.get_features(x)
+                    z = self._network.get_features(x)
                     self._buffer.add(x, z, y)
             logging.info(f"[Replay Buffer] Size: {self._buffer.size}")
             logging.info(f"[Replay Buffer] Size by classes: {self._buffer.size_by_class}")
+        
+        self._train()
+
+        if len(self._multiple_gpus) > 1:
+            self._network = self._network.module
         
         self.post_training()
     
     def post_training(self):
         if self.args["train_merge_method"] != "none":
             self.merge()
-
-    def _train(self, train_loader):
-        freeze_old = self.args["train_freeze_old"]
-        fc_type = self.args.get("fc_type", "mlp")
-        self._network.update_fc(
-            self._total_classes - self._known_classes,
-            fc_type=fc_type,
-            freeze_old=freeze_old,
-        )
-        self._network.to(self._device)
-        
+    
+    def _first_session_training(self, train_loader):
         if (
-            not os.path.exists(self.backbone_checkpoint(self._cur_task))
-            or not os.path.exists(self.head_checkpoint(self._cur_task))
+            not os.path.exists(self.first_session_backbone_checkpoint(self._cur_task))
             or self.args["reset"]
         ):
-            if self._cur_task > 0:
-                self._network.backbone.load_state_dict(
-                    torch.load(self.backbone_checkpoint(self._cur_task - 1)), strict=False
-                )
+            classifier = SimpleContinualLinear(
+                self._network.feature_dim, self._total_classes - self._known_classes
+            )
+            classifier.to(self._device)
 
             epochs = self.args['tuned_epoch']
             base_lr = self.init_lr
@@ -152,11 +147,7 @@ class BaseMergingLearner(BaseLearner):
                     "weight_decay": weight_decay,
                 },
                 {
-                    "params": [
-                        p
-                        for p in self._network.fc.heads[self._cur_task].parameters()
-                        if p.requires_grad
-                    ],
+                    "params": [p for p in classifier.parameters()],
                     "lr": base_lr,
                     "weight_decay": weight_decay,
                 },
@@ -171,33 +162,12 @@ class BaseMergingLearner(BaseLearner):
                         "weight_decay": weight_decay,
                     }
                 )
-            if not freeze_old:
-                parameters.append(
-                    {
-                        "params": [
-                            p
-                            for i, head in enumerate(self._network.fc.heads)
-                            if i != self._cur_task
-                            for p in head.parameters()
-                            if p.requires_grad
-                        ],
-                        "lr": base_lr * 1e-2,
-                        "weight_decay": weight_decay * 1e-2,
-                    },
-                )
 
             optimizer = optim.SGD(parameters, momentum=0.9)
             scheduler = optim.lr_scheduler.CosineAnnealingLR( optimizer, T_max=epochs, eta_min=self.min_lr)
 
             self._network.train()
-            logging.info(f"[Training] {self._network}")
-            
-            train_merge_reg = self.args.get("train_merge_reg", "none")
-            if train_merge_reg in ["l1", "l2"]:
-                train_merge_reg_coef = self.args.get("train_merge_reg_coef", 1.0)
-                if self._cur_task > 0:
-                    last_backbone_params = torch.load(self.backbone_checkpoint(self._cur_task - 1))
-                    last_backbone_params = torch.cat([p.view(-1) for p in last_backbone_params.values()]).to(self._device)
+            logging.info(f"[First Session Training] {self._network}")
 
             for epoch in range(epochs):
                 total_loss, total_acc, total = 0, 0, 0
@@ -205,59 +175,82 @@ class BaseMergingLearner(BaseLearner):
 
                 for i, (_, x, y) in enumerate(train_loader):
                     x, y = x.to(self._device), y.to(self._device)
-                    if self.args.get("train_with_buffer", False) and self._buffer is not None and self._buffer.size > 0:
-                        x_buf, _, y_buf = self._buffer.sample(batch_size=self.batch_size, seed=epoch*1000 + i)
-                        x = torch.cat([x, x_buf.to(self._device)], dim=0)
-                        y = torch.cat([y, y_buf.to(self._device)], dim=0)
-
                     features = self._network.get_features(x)
+                    y = torch.where(
+                        y - self._known_classes >= 0, y - self._known_classes, -100
+                    )
+                    logits = classifier(features)['logits']
+                    
+                    loss = F.cross_entropy(logits, y)
 
-                    if freeze_old:
-                        y = torch.where(
-                            y - self._known_classes >= 0, y - self._known_classes, -100
-                        )
-                        logits = self._network.fc.heads[self._cur_task](features)
-                    else:
-                        logits = self._network.fc(features)["logits"]
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
 
-                    if self.args.get("train_robustness", False):
-                        loss_vec = F.cross_entropy(logits, y, reduction='none')
-                        unique_classes = torch.unique(y)
+                    total_loss += loss.item() * len(y)
+                    total_acc += (logits.argmax(dim=1) == y).sum().item()
+                    total += len(y)
+
+                scheduler.step()
+
+                if epoch % 5 == 4 or epoch == epochs - 1:
+                    logging.info(
+                        f"[Training] Epoch {epoch + 1}/{epochs}, "
+                        f"Total Loss: {total_loss / total:.4f}, "
+                        f"Reg: {total_reg / (total):.4f}, "
+                        f"Acc: {total_acc / total:.4f}"
+                    )
+
+            torch.save(
+                self._network.get_backbone_trainable_params(),
+                self.first_session_backbone_checkpoint(self._cur_task),
+            )
+            
+            del classifier
+        else:
+            logging.info(f"[First Session Training] Load existing model for task {self._cur_task}")
+            self._network.backbone.load_state_dict(
+                torch.load(self.first_session_backbone_checkpoint(self._cur_task)), strict=False
+            )
+            self._buffer.add_model(copy.deepcopy(self._network.backbone.eval()))
+            self._network.backbone.load_state_dict(
+                torch.load(self.backbone_checkpoint(-1)), strict=False
+            ) # reset backbone to base model
+
+    def _train(self):
+        self._network.update_fc(
+            self._total_classes - self._known_classes,
+            fc_type="mlp",
+            freeze_old=False,
+        )
+        self._network.to(self._device)
+        
+        if (
+            not os.path.exists(self.backbone_checkpoint(self._cur_task))
+            or not os.path.exists(self.head_checkpoint(self._cur_task))
+            or self.args["reset"]
+        ):
+            # if self._cur_task > 0:
+            #     self._network.backbone.load_state_dict(
+            #         torch.load(self.backbone_checkpoint(self._cur_task - 1)), strict=False
+            #     )
+
+            epochs = self.args['tuned_epoch']
+            optimizer = optim.SGD(self._network.parameters(), lr=self.init_lr, weight_decay=self.weight_decay, momentum=0.9)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR( optimizer, T_max=epochs, eta_min=self.min_lr)
+
+            self._network.train()
+            logging.info(f"[Training] {self._network}")
+
+            for epoch in range(epochs):
+                total_loss, total_acc, total = 0, 0, 0
+                total_reg = 0.0
+                for x, _, y in self._buffer.__iter__(batch_size=64, seed=epoch * 1000):
+                    x, y = x.to(self._device), y.to(self._device)
+                    features = self._network.get_features(x)
+                    logits = self._network.fc(features)["logits"]
                         
-                        total_reg_loss = torch.tensor(0.0, device=self._device)
-                        
-                        for class_i in unique_classes:
-                            label_mask = (y == class_i)
-                            class_losses = loss_vec[label_mask]
-                            
-                            # Regularization term: minimize pairwise differences of losses within same class
-                            # Similar to term2: E_{x,x'~Ni}[|ℓ(yi, ht+1(x)) - ℓ(yi, ht+1(x'))|]
-                            if len(class_losses) >= 2:
-                                pairwise_diffs = torch.abs(
-                                    class_losses.unsqueeze(1) - class_losses.unsqueeze(0)
-                                )
-                                # Remove diagonal (self-comparisons)
-                                mask = ~torch.eye(len(class_losses), dtype=torch.bool, device=self._device)
-                                pairwise_diffs = pairwise_diffs[mask]
-                                total_reg_loss += pairwise_diffs.mean()
-                        
-                        if len(unique_classes) > 0:
-                            total_reg_loss /= len(unique_classes)
-                        
-                        loss = loss_vec.mean() + total_reg_loss
-                        total_reg += total_reg_loss
-                    else:
-                        loss = F.cross_entropy(logits, y)
-                        if self._cur_task > 0:
-                            if train_merge_reg in ["l1", "l2"]:
-                                backbone_params = self._network.get_backbone_trainable_params()
-                                backbone_params = torch.cat([p.view(-1) for p in backbone_params.values()])
-                                if train_merge_reg == "l1":
-                                    reg = F.smooth_l1_loss(backbone_params, last_backbone_params, reduction='sum')
-                                elif train_merge_reg == "l2":
-                                    reg = F.mse_loss(backbone_params, last_backbone_params, reduction='sum')
-                                loss += train_merge_reg_coef * reg
-                                total_reg += reg.item()
+                    loss = F.cross_entropy(logits, y)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -285,7 +278,6 @@ class BaseMergingLearner(BaseLearner):
                 self._network.fc.heads[-1].state_dict(),
                 self.head_checkpoint(self._cur_task),
             )
-            
         else:
             logging.info(f"[Training] Load existing model for task {self._cur_task}")
             self._network.backbone.load_state_dict(
@@ -362,23 +354,7 @@ class BaseMergingLearner(BaseLearner):
                 torch.save(
                     self._network.get_backbone_trainable_params(),
                     self.merged_checkpoint(self._cur_task),
-                )
-        
-        # if self._buffer is not None:
-        #     logging.info("[Merging] Updating buffer features with merged backbone")
-        #     self._network.eval()
-        #     with torch.no_grad():
-        #         # Update all buffer entries with new features from merged backbone
-        #         updated_buffer = []
-        #         for x, z_old, y in self._buffer._buffer:
-        #             x_cuda = x.unsqueeze(0).cuda()  # Add batch dimension and move to GPU
-        #             z_new = self._network.get_features(x_cuda).squeeze(0).cpu()  # Get new features
-        #             updated_buffer.append((x, z_new, y))
-                
-        #         # Replace the buffer with updated features
-        #         self._buffer._buffer = updated_buffer
-        #         logging.info(f"[Merging] Updated {len(updated_buffer)} buffer entries with new features")
-            
+                )   
     
     def _eval_cnn(self, loader):
         self._network.eval()
@@ -406,12 +382,17 @@ class BaseMergingLearner(BaseLearner):
             self.args['dataset'], 
             self.args['model_name'],
             self.args['backbone_type'],
-            self.args['train_ca_method']
+            self.args['train_buffer_type'],
+            str(self.args['train_buffer_size'])
         ]
         return "_".join(prefix_parts)
 
     def backbone_checkpoint(self, task=-1):
         filename = f"{self.prefix()}_backbone" + (f"_{task}.pt" if task >= 0 else "_base.pt")
+        return os.path.join(self.CHECKPOINT_DIR, filename)
+
+    def first_session_backbone_checkpoint(self, task=-1):
+        filename = f"{self.prefix()}_first_session_backbone" + (f"_{task}.pt" if task >= 0 else "_base.pt")
         return os.path.join(self.CHECKPOINT_DIR, filename)
 
     def head_checkpoint(self, task):

@@ -1,0 +1,44 @@
+{
+    "prefix": "reproduce",
+    "dataset": "imageneta",
+    "memory_size": 0,
+    "memory_per_class": 0,
+    "fixed_memory": false,
+    "shuffle": true,
+    "init_cls": 20,
+    "increment": 20,
+    "model_name": "local_robustness",
+    "backbone_type": "vit_base_patch16_224_lora",
+    "device": ["0"],
+    "seed": [1993],
+    "use_simplecil": false,
+    
+    "tuned_epoch":10,
+    "init_lr":1e-2,
+    "batch_size":64,
+    "weight_decay":5e-4,
+    "min_lr":0,
+    "optimizer":"sgd",
+
+    "use_RP": true,
+    "M": 10000,
+
+    "reset": true,
+    "model_lora_r": 256,
+    "model_lora_alpha": 512,
+    "model_lora_dropout": 0.0,
+    "model_lora_target_modules": ["qkv"],
+
+    "model_merge": "ties",
+    "model_merge_coef": 1.0,
+    "model_merge_topk": 100,
+    "train_local_robustness_num_clusters": 5,
+    "train_with_buffer": true,
+    "train_freeze_old": false,
+    "train_base_reg_weight": 0.1,
+    "train_buffer_percent": 0.05,
+    "train_buffer_size": 1000,
+    "train_buffer_decay": 1,
+    "train_ca_method": "none"
+}
+

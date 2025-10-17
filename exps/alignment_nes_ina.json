@@ -26,10 +26,16 @@
     "model_lora_dropout": 0.0,
 
     "train_freeze_old": true,
-    "train_merge": "ties",
+    "train_merge_method": "ties",
     "train_merge_coef": 1.0,
     "train_merge_topk": 100,
     "train_merge_incremental": true,
+
+    "train_buffer": false,
+    "train_buffer_size": 0.05,
+    "train_buffer_decay": 1.0,
+    "train_with_buffer": false,
+    "train_robustness": false,
     
     "train_ca_method": "nes",
     "train_ca_nes_iterations": 200,
